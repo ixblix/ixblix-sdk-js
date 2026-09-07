@@ -1,0 +1,54 @@
+{
+  "name": "@ixblix/sdk-js",
+  "version": "0.2.0",
+  "description": "Official ixblix SDK for desk/CRM integrations. Create overflow conversations, exchange end-to-end encrypted messages and media, and manage company onboarding.",
+  "license": "MIT",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ixblix/ixblix-sdk-js.git"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src --ext .ts",
+    "lint:fix": "eslint src --ext .ts --fix",
+    "test": "vitest run",
+    "test:e2e": "tsx src/e2e.ts",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "ixblix",
+    "messaging",
+    "overflow",
+    "desk",
+    "crm",
+    "e2ee",
+    "encryption"
+  ],
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+    "eslint": "^8.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.3.0",
+    "vitest": "^1.0.0"
+  }
+}
