@@ -55,8 +55,23 @@ export interface CompanyCustomization {
   id: string;
   brandName?: string;
   logoUrl?: string;
+  rectangularLogoUrl?: string;
+  squareIconUrl?: string;
   primaryColor?: string;
   faviconUrl?: string;
+  websiteUrl?: string;
+  welcomeMessage?: string;
+}
+
+/** Payload used to update a company's white-label customization. */
+export interface CompanyCustomizationInput {
+  brandName?: string;
+  logoUrl?: string;
+  rectangularLogoUrl?: string;
+  squareIconUrl?: string;
+  primaryColor?: string;
+  faviconUrl?: string;
+  websiteUrl?: string;
   welcomeMessage?: string;
 }
 

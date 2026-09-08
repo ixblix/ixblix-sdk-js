@@ -9,6 +9,8 @@ import { IxblixError } from "./errors.js";
 import type {
   ActivateCompanyResult,
   CompanyBalance,
+  CompanyCustomization,
+  CompanyCustomizationInput,
   ContactInput,
   ConversationKeys,
   CreateConversationResult,
@@ -94,7 +96,9 @@ export class IxblixClient {
 
     const contentType = response.headers.get("content-type") ?? "";
     const isJson = contentType.includes("application/json");
-    const data = isJson ? ((await response.json()) as T | IxblixErrorBody) : null;
+    const data = isJson
+      ? ((await response.json()) as T | IxblixErrorBody)
+      : null;
 
     if (!response.ok) {
       const body = data as IxblixErrorBody | null;
@@ -188,6 +192,20 @@ export class IxblixClient {
       webhookUrl: string | null;
       webhookSecret: string | null;
     }>("/api/companies/webhook", {
+      method: "PUT",
+      body: JSON.stringify(input),
+    });
+  }
+
+  /**
+   * Update the authenticated company's white-label customization (brand name,
+   * logos, primary color, favicon, welcome message, website URL). Returns the
+   * updated customization record.
+   */
+  updateCustomization(
+    input: CompanyCustomizationInput,
+  ): Promise<CompanyCustomization> {
+    return this.request<CompanyCustomization>("/api/companies/customization", {
       method: "PUT",
       body: JSON.stringify(input),
     });

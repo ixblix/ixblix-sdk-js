@@ -51,6 +51,7 @@ export type {
   ContactInput,
   Conversation,
   CompanyCustomization,
+  CompanyCustomizationInput,
   CompanySummary,
   CreateConversationResult,
   ConversationKeys,

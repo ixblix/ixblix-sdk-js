@@ -1,6 +1,6 @@
 {
   "name": "@ixblix/sdk-js",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Official ixblix SDK for desk/CRM integrations. Create overflow conversations, exchange end-to-end encrypted messages and media, and manage company onboarding.",
   "license": "MIT",
   "type": "module",
