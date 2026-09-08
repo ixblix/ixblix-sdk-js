@@ -18,6 +18,7 @@ export type {
   IxblixClientOptions,
   MediaUpload,
   MediaDownload,
+  BrandingFile,
 } from "./client.js";
 
 export { IxblixError } from "./errors.js";
@@ -53,6 +54,7 @@ export type {
   CompanyCustomization,
   CompanyCustomizationInput,
   CompanySummary,
+  CompanyProfile,
   CreateConversationResult,
   ConversationKeys,
   RegisterCustomerKeyResult,

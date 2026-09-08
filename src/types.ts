@@ -75,6 +75,16 @@ export interface CompanyCustomizationInput {
   welcomeMessage?: string;
 }
 
+/** The authenticated company's profile, including its customization. */
+export interface CompanyProfile {
+  id: string;
+  name: string;
+  slug: string;
+  status: string;
+  websiteUrl?: string | null;
+  customizations?: CompanyCustomization | null;
+}
+
 /** Company summary returned when creating a conversation. */
 export interface CompanySummary {
   id: string;

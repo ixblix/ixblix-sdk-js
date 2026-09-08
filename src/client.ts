@@ -11,6 +11,7 @@ import type {
   CompanyBalance,
   CompanyCustomization,
   CompanyCustomizationInput,
+  CompanyProfile,
   ContactInput,
   ConversationKeys,
   CreateConversationResult,
@@ -40,6 +41,14 @@ export interface IxblixClientOptions {
 /** A media file to upload, with its plaintext bytes and metadata. */
 export interface MediaUpload {
   /** Plaintext file bytes. The SDK encrypts them before upload. */
+  data: Uint8Array;
+  fileName: string;
+  mimeType: string;
+}
+
+/** A company branding asset (logo/icon) to upload. */
+export interface BrandingFile {
+  /** Raw file bytes (e.g. an SVG document). */
   data: Uint8Array;
   fileName: string;
   mimeType: string;
@@ -152,6 +161,14 @@ export class IxblixClient {
     return this.request<PaymentProvidersResult>("/api/payment/providers");
   }
 
+  /**
+   * Fetch the authenticated company's profile, including its white-label
+   * customization (brand name, logo URLs, primary color, welcome message).
+   */
+  getProfile(): Promise<CompanyProfile> {
+    return this.request<CompanyProfile>("/api/companies/profile");
+  }
+
   /** Fetch the authenticated company's balance and plan state. */
   getBalance(): Promise<CompanyBalance> {
     return this.request<CompanyBalance>("/api/companies/balance");
@@ -209,6 +226,60 @@ export class IxblixClient {
       method: "PUT",
       body: JSON.stringify(input),
     });
+  }
+
+  /**
+   * Upload company branding assets (a square icon and/or a rectangular logo,
+   * typically SVG) as multipart/form-data. Each file is stored in the public
+   * branding bucket and the corresponding customization URL is updated.
+   * Returns the updated customization record.
+   *
+   * @param assets Map of asset name -> file. Supported keys: `squareIcon` and
+   *   `rectangularLogo`. At least one must be provided.
+   */
+  async uploadBranding(assets: {
+    squareIcon?: BrandingFile;
+    rectangularLogo?: BrandingFile;
+  }): Promise<CompanyCustomization> {
+    const form = new FormData();
+    if (assets.squareIcon) {
+      form.append(
+        "squareIcon",
+        new Blob([assets.squareIcon.data as BlobPart], {
+          type: assets.squareIcon.mimeType,
+        }),
+        assets.squareIcon.fileName,
+      );
+    }
+    if (assets.rectangularLogo) {
+      form.append(
+        "rectangularLogo",
+        new Blob([assets.rectangularLogo.data as BlobPart], {
+          type: assets.rectangularLogo.mimeType,
+        }),
+        assets.rectangularLogo.fileName,
+      );
+    }
+
+    const headers: Record<string, string> = {};
+    if (this.apiKey) {
+      headers["X-API-Key"] = this.apiKey;
+    }
+    const response = await this.fetchImpl(
+      `${this.baseUrl}/api/companies/branding`,
+      { method: "POST", headers, body: form },
+    );
+    const data = (await response.json()) as
+      CompanyCustomization | IxblixErrorBody;
+    if (!response.ok) {
+      const body = data as IxblixErrorBody;
+      throw new IxblixError(body?.error ?? "ixblix branding upload failed", {
+        status: response.status,
+        code: body?.code,
+        details: body?.errors,
+      });
+    }
+    return data as CompanyCustomization;
   }
 
   // ---------------------------------------------------------------------------
