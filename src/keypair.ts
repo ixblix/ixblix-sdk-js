@@ -6,18 +6,10 @@
  * `0600`). Integrations that use a secret manager or KMS should instead manage
  * the keypair themselves and pass the resulting `OperatorKeyPair` to the SDK.
  */
-import {
-  readFileSync,
-  writeFileSync,
-  existsSync,
-  mkdirSync,
-} from "node:fs";
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import path from "node:path";
 import { createPrivateKey } from "node:crypto";
-import {
-  generateOperatorKeyPair,
-  type OperatorKeyPair,
-} from "./crypto.js";
+import { generateOperatorKeyPair, type OperatorKeyPair } from "./crypto.js";
 
 /**
  * Load the operator keypair from disk, generating and persisting it if absent.
@@ -48,9 +40,13 @@ export function loadOrCreateOperatorKey(directory: string): OperatorKeyPair {
   const keypair = generateOperatorKeyPair();
 
   mkdirSync(directory, { recursive: true });
-  writeFileSync(privateKeyFile, keypair.privateKey.export({ type: "pkcs8", format: "pem" }), {
-    mode: 0o600,
-  });
+  writeFileSync(
+    privateKeyFile,
+    keypair.privateKey.export({ type: "pkcs8", format: "pem" }),
+    {
+      mode: 0o600,
+    },
+  );
   writeFileSync(publicKeyFile, keypair.publicKeySpki);
   writeFileSync(keyIdFile, keypair.keyId);
 

@@ -58,11 +58,15 @@ describe("crypto", () => {
 
     const customerPlain = decryptMediaEnvelope(envelope, customer.privateKey);
     expect(customerPlain).not.toBeNull();
-    expect(Array.from(customerPlain as Uint8Array)).toEqual(Array.from(fileBytes));
+    expect(Array.from(customerPlain as Uint8Array)).toEqual(
+      Array.from(fileBytes),
+    );
 
     const operatorPlain = decryptMediaEnvelope(envelope, operator.privateKey);
     expect(operatorPlain).not.toBeNull();
-    expect(Array.from(operatorPlain as Uint8Array)).toEqual(Array.from(fileBytes));
+    expect(Array.from(operatorPlain as Uint8Array)).toEqual(
+      Array.from(fileBytes),
+    );
   });
 
   it("produces distinct ciphertexts for the same plaintext (fresh AES key)", () => {

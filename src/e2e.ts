@@ -24,14 +24,22 @@ import {
 const BASE_URL = process.env.IXBLIX_API_URL || "http://localhost:3000";
 
 /** Minimal customer-side helpers (the SDK is operator-focused). */
-async function customerRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
+async function customerRequest<T>(
+  path: string,
+  init: RequestInit = {},
+): Promise<T> {
   const response = await fetch(`${BASE_URL}${path}`, {
     ...init,
-    headers: { "Content-Type": "application/json", ...(init.headers as Record<string, string>) },
+    headers: {
+      "Content-Type": "application/json",
+      ...(init.headers as Record<string, string>),
+    },
   });
   const data = (await response.json()) as T;
   if (!response.ok) {
-    throw new Error(`customer ${path} failed: ${response.status} ${JSON.stringify(data)}`);
+    throw new Error(
+      `customer ${path} failed: ${response.status} ${JSON.stringify(data)}`,
+    );
   }
   return data;
 }
@@ -45,10 +53,10 @@ function assert(condition: boolean, message: string): void {
 async function main(): Promise<void> {
   // 1. Company onboarding via the SDK.
   const bootstrap = new IxblixClient({ baseUrl: BASE_URL });
-  const slug = `sdk-e2e-${Date.now()}`;
+  const handle = `sdk-e2e-${Date.now()}`;
   const register = await bootstrap.registerCompany({
     name: "SDK E2E Test",
-    slug,
+    handle,
     paymentProvider: "dummy",
   });
   const activate = await bootstrap.activateCompany(
@@ -59,7 +67,10 @@ async function main(): Promise<void> {
   assert(activate.apiKey.startsWith("ixblix_"), "should return an API key");
 
   // 2. Operator client with the fresh API key.
-  const ixblix = new IxblixClient({ baseUrl: BASE_URL, apiKey: activate.apiKey });
+  const ixblix = new IxblixClient({
+    baseUrl: BASE_URL,
+    apiKey: activate.apiKey,
+  });
 
   // 3. Operator keypair.
   const operatorKey = generateOperatorKeyPair();
@@ -74,15 +85,21 @@ async function main(): Promise<void> {
     channel: "whatsapp",
     operatorPublicKey: operatorKey.publicKeySpki,
   });
-  assert(created.conversation.keyStatus === "AWAITING_CUSTOMER", "starts awaiting customer");
+  assert(
+    created.conversation.keyStatus === "AWAITING_CUSTOMER",
+    "starts awaiting customer",
+  );
   assert(created.deeplink.length > 0, "returns a deeplink");
 
   // 5. Customer joins: generate a keypair and register its public key.
   const customerKey = generateOperatorKeyPair();
-  await customerRequest(`/api/conversations/${created.conversation.token}/key`, {
-    method: "POST",
-    body: JSON.stringify({ publicKey: customerKey.publicKeySpki }),
-  });
+  await customerRequest(
+    `/api/conversations/${created.conversation.token}/key`,
+    {
+      method: "POST",
+      body: JSON.stringify({ publicKey: customerKey.publicKeySpki }),
+    },
+  );
 
   // 6. Operator polls until the customer has joined.
   let keys = await ixblix.getConversationKeys(created.conversation.id);
@@ -92,7 +109,10 @@ async function main(): Promise<void> {
     await new Promise((r) => setTimeout(r, 200));
     keys = await ixblix.getConversationKeys(created.conversation.id);
   }
-  assert(keys.customerPublicKey === customerKey.publicKeySpki, "operator sees customer key");
+  assert(
+    keys.customerPublicKey === customerKey.publicKeySpki,
+    "operator sees customer key",
+  );
   const customerPublicKey = keys.customerPublicKey as string;
 
   // 7. Operator sends an encrypted message.
@@ -102,17 +122,26 @@ async function main(): Promise<void> {
     operatorKey.keyId,
     operatorKey.publicKeySpki,
   );
-  const sent = await ixblix.sendCompanyMessage(created.conversation.id, outbound);
+  const sent = await ixblix.sendCompanyMessage(
+    created.conversation.id,
+    outbound,
+  );
   assert(sent.senderType === "COMPANY", "message sent by company");
   assert(sent.contentEncrypted === true, "message is encrypted");
 
   // 8. Customer decrypts the operator's message.
   const customerPlain = decryptEnvelope(sent, customerKey.privateKey);
-  assert(customerPlain === "Hello from the operator!", "customer can decrypt operator message");
+  assert(
+    customerPlain === "Hello from the operator!",
+    "customer can decrypt operator message",
+  );
 
   // 9. Operator reads back its own sent message (self-read).
   const operatorSelfRead = decryptEnvelope(sent, operatorKey.privateKey);
-  assert(operatorSelfRead === "Hello from the operator!", "operator can self-read its message");
+  assert(
+    operatorSelfRead === "Hello from the operator!",
+    "operator can self-read its message",
+  );
 
   // 10. Customer sends an encrypted reply (via the contact endpoint).
   const replyEnvelope = encryptToRecipient(
@@ -139,11 +168,19 @@ async function main(): Promise<void> {
   const messages = await ixblix.listMessages(created.conversation.id);
   const replyFromList = messages.find((m) => m.id === reply.id);
   assert(Boolean(replyFromList), "reply appears in the message list");
-  const operatorPlain = decryptEnvelope(replyFromList as Message, operatorKey.privateKey);
-  assert(operatorPlain === "Hello from the customer!", "operator can decrypt customer reply");
+  const operatorPlain = decryptEnvelope(
+    replyFromList as Message,
+    operatorKey.privateKey,
+  );
+  assert(
+    operatorPlain === "Hello from the customer!",
+    "operator can decrypt customer reply",
+  );
 
   // 12. Media round-trip: operator uploads an encrypted image.
-  const imageBytes = new Uint8Array([137, 80, 78, 71, 1, 2, 3, 4, 5, 250, 251, 252]);
+  const imageBytes = new Uint8Array([
+    137, 80, 78, 71, 1, 2, 3, 4, 5, 250, 251, 252,
+  ]);
   const mediaEnvelope = encryptMediaToRecipient(
     imageBytes,
     customerPublicKey,
@@ -162,7 +199,9 @@ async function main(): Promise<void> {
   assert(Boolean(mediaMessage.mediaId), "media message has a mediaId");
 
   // 13. Operator downloads and decrypts its own media (self-read).
-  const download = await ixblix.downloadCompanyMedia(mediaMessage.mediaId as string);
+  const download = await ixblix.downloadCompanyMedia(
+    mediaMessage.mediaId as string,
+  );
   const decryptedMedia = decryptMediaEnvelope(
     {
       content: Buffer.from(download.data).toString("base64"),
@@ -175,7 +214,8 @@ async function main(): Promise<void> {
   );
   assert(decryptedMedia !== null, "media decrypts");
   assert(
-    Array.from(decryptedMedia as Uint8Array).join(",") === Array.from(imageBytes).join(","),
+    Array.from(decryptedMedia as Uint8Array).join(",") ===
+      Array.from(imageBytes).join(","),
     "media bytes match",
   );
 
@@ -186,7 +226,7 @@ async function main(): Promise<void> {
   // eslint-disable-next-line no-console
   console.log("E2E test passed ✓");
   // eslint-disable-next-line no-console
-  console.log(`  Company: ${register.company.slug}`);
+  console.log(`  Company: ${register.company.handle}`);
   // eslint-disable-next-line no-console
   console.log(`  Conversation: ${created.conversation.id}`);
 }

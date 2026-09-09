@@ -14,7 +14,11 @@ export class IxblixError extends Error {
 
   constructor(
     message: string,
-    options: { status?: number; code?: string; details?: IxblixErrorBody["errors"] } = {},
+    options: {
+      status?: number;
+      code?: string;
+      details?: IxblixErrorBody["errors"];
+    } = {},
   ) {
     super(message);
     this.name = "IxblixError";

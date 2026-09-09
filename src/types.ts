@@ -79,7 +79,7 @@ export interface CompanyCustomizationInput {
 export interface CompanyProfile {
   id: string;
   name: string;
-  slug: string;
+  handle: string;
   status: string;
   websiteUrl?: string | null;
   customizations?: CompanyCustomization | null;
@@ -235,7 +235,7 @@ export interface Plan {
 /** Company registration payload (keyless onboarding). */
 export interface RegisterCompanyInput {
   name: string;
-  slug: string;
+  handle: string;
   planId?: string;
   paymentProvider?: string;
   confirmationWebhookUrl?: string;
@@ -256,7 +256,7 @@ export interface RegisterCompanyResult {
   company: {
     id: string;
     name: string;
-    slug: string;
+    handle: string;
     status: string;
     planId?: string;
     createdAt: string;

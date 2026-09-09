@@ -152,7 +152,7 @@ key:
 ```ts
 const { company, payment } = await ixblix.registerCompany({
   name: "Acme CRM",
-  slug: "acme-crm",
+  handle: "acme-crm",
   paymentProvider: "dummy",
 });
 
