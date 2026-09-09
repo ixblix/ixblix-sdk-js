@@ -92,6 +92,30 @@ export interface CompanySummary {
   customizations?: CompanyCustomization;
 }
 
+/**
+ * Identity of the desk/CRM agent (operator) handling a conversation. The
+ * operator can be attached when the conversation is created and updated at any
+ * time via the company API.
+ */
+export interface Operator {
+  /** Stable identifier of the operator in the desk/CRM. */
+  uuid?: string;
+  /** Display name of the operator. */
+  name?: string;
+  /** URL of the operator's avatar image. */
+  image?: string;
+  /** MD5 hash of the operator's email, used to build a Gravatar URL. */
+  gravatarHash?: string;
+}
+
+/** Payload used to attach/update an operator on a conversation. */
+export interface OperatorInput {
+  uuid?: string | null;
+  name?: string | null;
+  image?: string | null;
+  gravatarHash?: string | null;
+}
+
 /** Result of creating a conversation. */
 export interface CreateConversationResult {
   conversation: Conversation;
@@ -99,6 +123,12 @@ export interface CreateConversationResult {
   /** URL to share with the contact so they can join the secure chat. */
   deeplink: string;
   company: CompanySummary;
+  operator?: Operator;
+}
+
+/** Result of updating a conversation's operator. */
+export interface UpdateOperatorResult {
+  operator: Operator;
 }
 
 /** Current E2EE key state of a conversation (operator view). */
@@ -164,6 +194,8 @@ export interface Message {
   /** Present when the message carries an attached media file. */
   mediaId?: string;
   media?: Media;
+  /** Identifier of the operator that sent this message (COMPANY-sent only). */
+  operatorUuid?: string;
   sentAt: string;
 }
 

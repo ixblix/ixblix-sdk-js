@@ -19,12 +19,14 @@ import type {
   Media,
   Message,
   MessageEnvelope,
+  OperatorInput,
   OriginalChannelMessageInput,
   PaymentProvidersResult,
   Plan,
   PurchaseCreditsResult,
   RegisterCompanyInput,
   RegisterCompanyResult,
+  UpdateOperatorResult,
   IxblixErrorBody,
 } from "./types.js";
 
@@ -289,16 +291,44 @@ export class IxblixClient {
   /**
    * Create an overflow conversation for a contact. Supply the operator's RSA
    * public key (base64 SPKI DER) so the customer can encrypt messages to it.
+   * Optionally attach the operator's identity (uuid, name, image and/or
+   * gravatar hash) so the customer's client can display who is handling the
+   * conversation.
    */
   createConversation(input: {
     contact: ContactInput;
     channel: string;
     operatorPublicKey: string;
+    operator?: {
+      uuid?: string;
+      name?: string;
+      image?: string;
+      gravatarHash?: string;
+    };
   }): Promise<CreateConversationResult> {
     return this.request<CreateConversationResult>("/api/conversations", {
       method: "POST",
       body: JSON.stringify(input),
     });
+  }
+
+  /**
+   * Update the operator identity (uuid, name, image and/or gravatar hash)
+   * attached to a conversation. Only the provided fields are updated; omitted
+   * fields keep their current value. Pass `null` to clear a field. The
+   * operator can be updated at any moment during the conversation.
+   */
+  updateOperator(
+    conversationId: string,
+    operator: OperatorInput,
+  ): Promise<UpdateOperatorResult> {
+    return this.request<UpdateOperatorResult>(
+      `/api/conversations/${conversationId}/operator`,
+      {
+        method: "PUT",
+        body: JSON.stringify({ operator }),
+      },
+    );
   }
 
   /**
@@ -318,11 +348,13 @@ export class IxblixClient {
   /**
    * Send an encrypted message from the company to the contact. The message must
    * already be encrypted to the customer's public key (see the crypto helpers).
+   * Optionally pass the operator uuid so it is attributed to the message.
    */
   sendCompanyMessage(
     conversationId: string,
     envelope: MessageEnvelope,
     contentType = "text",
+    operatorUuid?: string,
   ): Promise<Message> {
     return this.request<Message>("/api/messages/company", {
       method: "POST",
@@ -335,6 +367,7 @@ export class IxblixClient {
         encryptedKey: envelope.encryptedKey,
         selfEncryptedKey: envelope.selfEncryptedKey,
         keyId: envelope.keyId,
+        operatorUuid,
       }),
     });
   }
@@ -398,12 +431,14 @@ export class IxblixClient {
 
   /**
    * Upload an encrypted media file from the company. `file.data` must be the
-   * ciphertext bytes produced by the media encryption helper.
+   * ciphertext bytes produced by the media encryption helper. Optionally pass
+   * the operator uuid so the media message is attributed to the operator.
    */
   async sendCompanyMedia(
     conversationId: string,
     file: MediaUpload,
     envelope: MessageEnvelope,
+    operatorUuid?: string,
   ): Promise<Message> {
     const form = new FormData();
     form.append("conversationId", conversationId);
@@ -417,6 +452,9 @@ export class IxblixClient {
     form.append("encryptedKey", envelope.encryptedKey);
     form.append("selfEncryptedKey", envelope.selfEncryptedKey);
     form.append("keyId", envelope.keyId);
+    if (operatorUuid) {
+      form.append("operatorUuid", operatorUuid);
+    }
 
     const headers: Record<string, string> = {};
     if (this.apiKey) {

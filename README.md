@@ -53,6 +53,14 @@ const { conversation, deeplink } = await ixblix.createConversation({
   },
   channel: "whatsapp",
   operatorPublicKey: operatorKey.publicKeySpki,
+  // Optionally attach the operator's identity so the customer's client can
+  // display who is handling the conversation (avatar, name, gravatar).
+  operator: {
+    uuid: "agent-42",
+    name: "Maria Silva",
+    image: "https://cdn.example.com/avatars/maria.png",
+    // or gravatarHash: md5("maria@example.com")
+  },
 });
 
 // 4. Share `deeplink` with the contact. When they open it, their browser
@@ -85,6 +93,56 @@ for (const message of messages) {
   console.log(plaintext);
 }
 ```
+
+## Operator identity
+
+You can attach the identity of the desk/CRM agent (operator) handling a
+conversation so the customer's client can display who is talking to them. The
+operator is described by a stable `uuid`, a display `name`, and either an
+`image` URL or a `gravatarHash` (MD5 of the operator's email).
+
+Attach the operator when creating the conversation:
+
+```ts
+const { conversation } = await ixblix.createConversation({
+  contact: { externalId: "whatsapp_5511999999999", name: "John Doe" },
+  channel: "whatsapp",
+  operatorPublicKey: operatorKey.publicKeySpki,
+  operator: {
+    uuid: "agent-42",
+    name: "Maria Silva",
+    gravatarHash: "5d41402abc4b2a76b9719d911017c592",
+  },
+});
+```
+
+Update the operator at any moment during the conversation. Only the provided
+fields are updated; omitted fields keep their current value. Pass `null` to
+clear a field:
+
+```ts
+await ixblix.updateOperator(conversation.id, {
+  name: "Maria S. (Supervisor)",
+  image: "https://cdn.example.com/avatars/maria-v2.png",
+});
+```
+
+Every company-sent message is attributed to the conversation's operator. You
+can also pass the operator uuid explicitly when sending a message or media so
+the message is attributed to a specific agent:
+
+```ts
+await ixblix.sendCompanyMessage(
+  conversation.id,
+  envelope,
+  "text",
+  "agent-42", // operator uuid
+);
+```
+
+The returned `Message` objects include an `operatorUuid` field on
+company-sent messages, and the conversation payloads include the full
+`operator` object so the customer's client can render the avatar.
 
 ## Company onboarding
 
