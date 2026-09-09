@@ -53,6 +53,8 @@ export type {
   Conversation,
   CompanyCustomization,
   CompanyCustomizationInput,
+  CompanyEncryptionKey,
+  RegisterCompanyEncryptionKeyInput,
   CompanySummary,
   CompanyProfile,
   CreateConversationResult,

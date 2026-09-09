@@ -75,7 +75,13 @@ async function main(): Promise<void> {
   // 3. Operator keypair.
   const operatorKey = generateOperatorKeyPair();
 
-  // 4. Create a conversation.
+  // 4. Register the operator key as the company encryption key.
+  await ixblix.registerEncryptionKey({
+    keyId: operatorKey.keyId,
+    publicKey: operatorKey.publicKeySpki,
+  });
+
+  // 5. Create a conversation.
   const created = await ixblix.createConversation({
     contact: {
       externalId: `sdk-e2e-${Date.now()}`,
@@ -83,7 +89,6 @@ async function main(): Promise<void> {
       phone: "+55 11 99999-9999",
     },
     channel: "whatsapp",
-    operatorPublicKey: operatorKey.publicKeySpki,
   });
   assert(
     created.conversation.keyStatus === "AWAITING_CUSTOMER",
@@ -91,7 +96,7 @@ async function main(): Promise<void> {
   );
   assert(created.deeplink.length > 0, "returns a deeplink");
 
-  // 5. Customer joins: generate a keypair and register its public key.
+  // 6. Customer joins: generate a keypair and register its public key.
   const customerKey = generateOperatorKeyPair();
   await customerRequest(
     `/api/conversations/${created.conversation.token}/key`,
@@ -101,7 +106,7 @@ async function main(): Promise<void> {
     },
   );
 
-  // 6. Operator polls until the customer has joined.
+  // 7. Operator polls until the customer has joined.
   let keys = await ixblix.getConversationKeys(created.conversation.id);
   let attempts = 0;
   while (keys.keyStatus !== "ACTIVE" || !keys.customerPublicKey) {
@@ -115,7 +120,7 @@ async function main(): Promise<void> {
   );
   const customerPublicKey = keys.customerPublicKey as string;
 
-  // 7. Operator sends an encrypted message.
+  // 8. Operator sends an encrypted message.
   const outbound = encryptToRecipient(
     "Hello from the operator!",
     customerPublicKey,
@@ -129,21 +134,21 @@ async function main(): Promise<void> {
   assert(sent.senderType === "COMPANY", "message sent by company");
   assert(sent.contentEncrypted === true, "message is encrypted");
 
-  // 8. Customer decrypts the operator's message.
+  // 9. Customer decrypts the operator's message.
   const customerPlain = decryptEnvelope(sent, customerKey.privateKey);
   assert(
     customerPlain === "Hello from the operator!",
     "customer can decrypt operator message",
   );
 
-  // 9. Operator reads back its own sent message (self-read).
+  // 10. Operator reads back its own sent message (self-read).
   const operatorSelfRead = decryptEnvelope(sent, operatorKey.privateKey);
   assert(
     operatorSelfRead === "Hello from the operator!",
     "operator can self-read its message",
   );
 
-  // 10. Customer sends an encrypted reply (via the contact endpoint).
+  // 11. Customer sends an encrypted reply (via the contact endpoint).
   const replyEnvelope = encryptToRecipient(
     "Hello from the customer!",
     keys.operatorPublicKey as string,
@@ -164,7 +169,7 @@ async function main(): Promise<void> {
     }),
   });
 
-  // 11. Operator lists and decrypts the customer's reply.
+  // 12. Operator lists and decrypts the customer's reply.
   const messages = await ixblix.listMessages(created.conversation.id);
   const replyFromList = messages.find((m) => m.id === reply.id);
   assert(Boolean(replyFromList), "reply appears in the message list");

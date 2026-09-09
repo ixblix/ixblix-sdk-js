@@ -11,6 +11,7 @@ import type {
   CompanyBalance,
   CompanyCustomization,
   CompanyCustomizationInput,
+  CompanyEncryptionKey,
   CompanyProfile,
   ContactInput,
   ConversationKeys,
@@ -24,6 +25,7 @@ import type {
   PaymentProvidersResult,
   Plan,
   PurchaseCreditsResult,
+  RegisterCompanyEncryptionKeyInput,
   RegisterCompanyInput,
   RegisterCompanyResult,
   UpdateOperatorResult,
@@ -217,6 +219,26 @@ export class IxblixClient {
   }
 
   /**
+   * Register or rotate the authenticated company's RSA public key used for
+   * end-to-end encryption. The previous active key is retired (kept for
+   * decrypting existing conversations) and new conversations snapshot the
+   * fresh key.
+   */
+  registerEncryptionKey(
+    input: RegisterCompanyEncryptionKeyInput,
+  ): Promise<CompanyEncryptionKey> {
+    return this.request<CompanyEncryptionKey>("/api/companies/encryption-key", {
+      method: "PUT",
+      body: JSON.stringify(input),
+    });
+  }
+
+  /** Fetch the currently active company encryption key. */
+  getEncryptionKey(): Promise<CompanyEncryptionKey> {
+    return this.request<CompanyEncryptionKey>("/api/companies/encryption-key");
+  }
+
+  /**
    * Update the authenticated company's white-label customization (brand name,
    * logos, primary color, favicon, welcome message, website URL). Returns the
    * updated customization record.
@@ -289,8 +311,8 @@ export class IxblixClient {
   // ---------------------------------------------------------------------------
 
   /**
-   * Create an overflow conversation for a contact. Supply the operator's RSA
-   * public key (base64 SPKI DER) so the customer can encrypt messages to it.
+   * Create an overflow conversation for a contact. Uses the company's
+   * currently active encryption key so the customer can encrypt messages to it.
    * Optionally attach the operator's identity (uuid, name, image and/or
    * gravatar hash) so the customer's client can display who is handling the
    * conversation.
@@ -298,7 +320,6 @@ export class IxblixClient {
   createConversation(input: {
     contact: ContactInput;
     channel: string;
-    operatorPublicKey: string;
     operator?: {
       uuid?: string;
       name?: string;

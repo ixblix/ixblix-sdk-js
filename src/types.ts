@@ -131,11 +131,29 @@ export interface UpdateOperatorResult {
   operator: Operator;
 }
 
+/** A company-level RSA encryption key used for end-to-end encryption. */
+export interface CompanyEncryptionKey {
+  id: string;
+  keyId: string;
+  publicKey: string;
+  status: "ACTIVE" | "RETIRED";
+  activatedAt: string;
+  retiredAt: string | null;
+  createdAt: string;
+}
+
+/** Input to register or rotate a company encryption key. */
+export interface RegisterCompanyEncryptionKeyInput {
+  keyId: string;
+  publicKey: string;
+}
+
 /** Current E2EE key state of a conversation (operator view). */
 export interface ConversationKeys {
   conversationId: string;
   keyStatus: ConversationKeyStatus;
   operatorPublicKey: string | null;
+  operatorKeyId: string | null;
   customerPublicKey: string | null;
 }
 

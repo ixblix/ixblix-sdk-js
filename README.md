@@ -44,7 +44,15 @@ const ixblix = new IxblixClient({
 //    Persist it once (e.g. loadOrCreateOperatorKey("./.keys")) and reuse it.
 const operatorKey = generateOperatorKeyPair();
 
-// 3. Create an overflow conversation for a contact.
+// 3. Register the public key as the company's encryption key. New
+//    conversations will snapshot it automatically; rotate it at any time to
+//    use a fresh key for future conversations.
+await ixblix.registerEncryptionKey({
+  keyId: operatorKey.keyId,
+  publicKey: operatorKey.publicKeySpki,
+});
+
+// 4. Create an overflow conversation for a contact.
 const { conversation, deeplink } = await ixblix.createConversation({
   contact: {
     externalId: "whatsapp_5511999999999",
@@ -52,7 +60,6 @@ const { conversation, deeplink } = await ixblix.createConversation({
     phone: "+55 11 99999-9999",
   },
   channel: "whatsapp",
-  operatorPublicKey: operatorKey.publicKeySpki,
   // Optionally attach the operator's identity so the customer's client can
   // display who is handling the conversation (avatar, name, gravatar).
   operator: {
@@ -63,10 +70,10 @@ const { conversation, deeplink } = await ixblix.createConversation({
   },
 });
 
-// 4. Share `deeplink` with the contact. When they open it, their browser
+// 5. Share `deeplink` with the contact. When they open it, their browser
 //    generates a keypair and registers its public key with ixblix.
 
-// 5. Wait for the customer to join. Prefer a webhook (`CUSTOMER_JOINED`) so
+// 6. Wait for the customer to join. Prefer a webhook (`CUSTOMER_JOINED`) so
 //    you don't poll. If you must poll, use getConversationKeys:
 let keys = await ixblix.getConversationKeys(conversation.id);
 while (keys.keyStatus !== "ACTIVE" || !keys.customerPublicKey) {
@@ -74,7 +81,7 @@ while (keys.keyStatus !== "ACTIVE" || !keys.customerPublicKey) {
   keys = await ixblix.getConversationKeys(conversation.id);
 }
 
-// 6. Encrypt and send a message to the customer.
+// 7. Encrypt and send a message to the customer.
 const envelope = encryptToRecipient(
   "Hello! How can we help?",
   keys.customerPublicKey,
@@ -83,7 +90,7 @@ const envelope = encryptToRecipient(
 );
 await ixblix.sendCompanyMessage(conversation.id, envelope);
 
-// 7. Read incoming messages (decrypt with your private key). Prefer receiving
+// 8. Read incoming messages (decrypt with your private key). Prefer receiving
 //    a `MESSAGE_RECEIVED` webhook and fetching the message, rather than
 //    polling listMessages.
 const messages = await ixblix.listMessages(conversation.id);
@@ -107,7 +114,6 @@ Attach the operator when creating the conversation:
 const { conversation } = await ixblix.createConversation({
   contact: { externalId: "whatsapp_5511999999999", name: "John Doe" },
   channel: "whatsapp",
-  operatorPublicKey: operatorKey.publicKeySpki,
   operator: {
     uuid: "agent-42",
     name: "Maria Silva",
@@ -195,7 +201,11 @@ conversation events in real time **without polling**. Configure your endpoint
 and verify incoming payloads:
 
 ```ts
-import { IxblixClient, verifyWebhook, WEBHOOK_SIGNATURE_HEADER } from "@ixblix/sdk-js";
+import {
+  IxblixClient,
+  verifyWebhook,
+  WEBHOOK_SIGNATURE_HEADER,
+} from "@ixblix/sdk-js";
 
 // 1. Register your webhook URL. The returned secret is shown only once.
 const ixblix = new IxblixClient({
