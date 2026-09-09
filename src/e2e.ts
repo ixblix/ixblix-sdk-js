@@ -86,7 +86,7 @@ async function main(): Promise<void> {
     contact: {
       externalId: `sdk-e2e-${Date.now()}`,
       name: "E2E Customer",
-      phone: "+55 11 99999-9999",
+      metadata: { source: "sdk-e2e" },
     },
     channel: "whatsapp",
   });

@@ -24,9 +24,9 @@ export interface Contact {
   id: string;
   externalId: string;
   name?: string;
-  phone?: string;
-  email?: string;
+  metadata?: Record<string, unknown>;
   consentStatus: ConsentStatus;
+  consentedAt?: string;
 }
 
 /** Payload used to create a conversation for a contact. */
@@ -34,8 +34,6 @@ export interface ContactInput {
   /** Unique identifier of the contact in the original channel. */
   externalId: string;
   name?: string;
-  phone?: string;
-  email?: string;
   /** Free-form metadata from the CRM. */
   metadata?: Record<string, unknown>;
 }

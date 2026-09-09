@@ -57,7 +57,7 @@ const { conversation, deeplink } = await ixblix.createConversation({
   contact: {
     externalId: "whatsapp_5511999999999",
     name: "John Doe",
-    phone: "+55 11 99999-9999",
+    metadata: { phone: "+55 11 99999-9999" },
   },
   channel: "whatsapp",
   // Optionally attach the operator's identity so the customer's client can
