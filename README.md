@@ -59,7 +59,6 @@ const { conversation, deeplink } = await ixblix.createConversation({
     name: "John Doe",
     metadata: { phone: "+55 11 99999-9999" },
   },
-  channel: "whatsapp",
   // Optionally attach the operator's identity so the customer's client can
   // display who is handling the conversation (avatar, name, gravatar).
   operator: {
@@ -113,7 +112,6 @@ Attach the operator when creating the conversation:
 ```ts
 const { conversation } = await ixblix.createConversation({
   contact: { externalId: "whatsapp_5511999999999", name: "John Doe" },
-  channel: "whatsapp",
   operator: {
     uuid: "agent-42",
     name: "Maria Silva",

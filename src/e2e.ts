@@ -88,7 +88,6 @@ async function main(): Promise<void> {
       name: "E2E Customer",
       metadata: { source: "sdk-e2e" },
     },
-    channel: "whatsapp",
   });
   assert(
     created.conversation.keyStatus === "AWAITING_CUSTOMER",

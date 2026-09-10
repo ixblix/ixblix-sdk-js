@@ -319,7 +319,6 @@ export class IxblixClient {
    */
   createConversation(input: {
     contact: ContactInput;
-    channel: string;
     operator?: {
       uuid?: string;
       name?: string;

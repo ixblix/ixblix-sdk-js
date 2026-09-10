@@ -44,7 +44,6 @@ export interface Conversation {
   token: string;
   status: ConversationStatus;
   keyStatus: ConversationKeyStatus;
-  sourceChannel: string;
   createdAt: string;
 }
 
@@ -237,7 +236,7 @@ export interface Plan {
   id: string;
   name: string;
   description?: string;
-  billingType: "MESSAGES" | "CONVERSATIONS" | "COMPANY" | "TIME" | "CHANNEL";
+  billingType: "MESSAGES" | "CONVERSATIONS" | "COMPANY" | "TIME";
   includedConversations?: number | null;
   includedMessages?: number | null;
   durationDays?: number | null;
