@@ -25,8 +25,17 @@ export interface Contact {
   externalId: string;
   name?: string;
   metadata?: Record<string, unknown>;
+  /**
+   * LGPD consent status. Consent is memorized per company: once `GRANTED`, it
+   * is reused by every conversation with the same company and the customer is
+   * not asked again.
+   */
   consentStatus: ConsentStatus;
-  consentedAt?: string;
+  /**
+   * Timestamp of the first time the customer granted consent for this company.
+   * Absent/null when consent was never granted.
+   */
+  consentedAt?: string | null;
 }
 
 /** Payload used to create a conversation for a contact. */
