@@ -218,6 +218,15 @@ export interface Message {
   /** Present when the message carries an attached media file. */
   mediaId?: string;
   media?: Media;
+  /**
+   * Client-generated idempotency key, echoed back for contact-sent messages.
+   *
+   * The customer app renders an optimistic balloon before the request is
+   * answered and uses this id to reconcile it with the server-assigned message.
+   * Sending the same id twice returns the message created by the first attempt
+   * instead of creating a duplicate, which makes retries safe.
+   */
+  clientMessageId?: string | null;
   /** Identifier of the operator that sent this message (COMPANY-sent only). */
   operatorUuid?: string;
   sentAt: string;
