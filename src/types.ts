@@ -229,7 +229,47 @@ export interface Message {
   clientMessageId?: string | null;
   /** Identifier of the operator that sent this message (COMPANY-sent only). */
   operatorUuid?: string;
+  /**
+   * Identifier of the message this one replies to, when it is a reply.
+   * Absent/null when the message is not a reply.
+   */
+  replyToId?: string | null;
+  /**
+   * The replied-to message (one level deep), so the quote can be rendered
+   * without an extra request. Null when the message is not a reply or the
+   * original message was deleted.
+   */
+  replyTo?: Message | null;
+  /** Emoji reactions attached to this message. */
+  reactions?: MessageReaction[];
   sentAt: string;
+}
+
+/**
+ * An emoji reaction attached to a message.
+ *
+ * A reactor holds at most one reaction per message, so changing the emoji
+ * replaces the previous one. The reactor is the customer (`CONTACT`) or an
+ * operator (`COMPANY`).
+ */
+export interface MessageReaction {
+  id: string;
+  messageId: string;
+  emoji: string;
+  senderType: SenderType;
+  /** Identifier of the operator that reacted (COMPANY reactions only). */
+  operatorUuid?: string | null;
+  createdAt: string;
+}
+
+/** Result of adding, replacing or removing a message reaction. */
+export interface MessageReactionResult {
+  id: string;
+  messageId: string;
+  emoji: string | null;
+  senderType: SenderType;
+  operatorUuid?: string | null;
+  createdAt: string;
 }
 
 /** Metadata of a media file attached to a message. */
@@ -360,6 +400,7 @@ export type WebhookEvent =
   | CompanyActivatedEvent
   | MessageReceivedEvent
   | MessageReadEvent
+  | MessageReactionEvent
   | CustomerJoinedEvent
   | ConversationClosedEvent
   | PresenceEvent
@@ -379,6 +420,8 @@ export interface MessageReceivedEvent {
   companyId: string;
   conversationId: string;
   messageId: string;
+  /** Identifier of the message this one replies to, when it is a reply. */
+  replyToId?: string | null;
   sentAt: string;
 }
 
@@ -389,6 +432,24 @@ export interface MessageReadEvent {
   conversationId: string;
   messageId: string;
   readAt: string;
+}
+
+/**
+ * Delivered when a message reaction is added, replaced or removed.
+ *
+ * `emoji` is null when the reaction was removed. `senderType` identifies who
+ * reacted: `CONTACT` for the customer, `COMPANY` for an operator.
+ */
+export interface MessageReactionEvent {
+  event: "MESSAGE_REACTION";
+  companyId: string;
+  conversationId: string;
+  messageId: string;
+  emoji: string | null;
+  action: "added" | "removed";
+  senderType: SenderType;
+  operatorUuid?: string | null;
+  reactedAt: string;
 }
 
 /** Delivered when the customer joins the secure conversation and registers its public key. */

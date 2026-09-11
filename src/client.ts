@@ -20,6 +20,7 @@ import type {
   Media,
   Message,
   MessageEnvelope,
+  MessageReactionResult,
   OperatorInput,
   OriginalChannelMessageInput,
   PaymentProvidersResult,
@@ -368,13 +369,15 @@ export class IxblixClient {
   /**
    * Send an encrypted message from the company to the contact. The message must
    * already be encrypted to the customer's public key (see the crypto helpers).
-   * Optionally pass the operator uuid so it is attributed to the message.
+   * Optionally pass the operator uuid so it is attributed to the message, and
+   * `replyToId` to send it as a reply to another message.
    */
   sendCompanyMessage(
     conversationId: string,
     envelope: MessageEnvelope,
     contentType = "text",
     operatorUuid?: string,
+    replyToId?: string | null,
   ): Promise<Message> {
     return this.request<Message>("/api/messages/company", {
       method: "POST",
@@ -388,13 +391,42 @@ export class IxblixClient {
         selfEncryptedKey: envelope.selfEncryptedKey,
         keyId: envelope.keyId,
         operatorUuid,
+        replyToId: replyToId ?? undefined,
       }),
     });
   }
 
-  /** List all messages of a conversation (content is always ciphertext). */
+  /**
+   * List all messages of a conversation (content is always ciphertext).
+   * Each message includes its replied-to message (one level deep) and its
+   * emoji reactions.
+   */
   listMessages(conversationId: string): Promise<Message[]> {
     return this.request<Message[]>(`/api/messages/${conversationId}`);
+  }
+
+  /**
+   * Add, replace or remove an emoji reaction on a message as the operator.
+   * A reactor holds at most one reaction per message; pass an empty `emoji` to
+   * remove the operator's existing reaction. Emits a `message_reaction`
+   * Socket.io event to the customer's chat app and a `MESSAGE_REACTION`
+   * webhook to the operator.
+   */
+  reactToMessage(
+    conversationId: string,
+    messageId: string,
+    emoji: string,
+    operatorUuid?: string,
+  ): Promise<MessageReactionResult> {
+    return this.request<MessageReactionResult>("/api/messages/company/react", {
+      method: "POST",
+      body: JSON.stringify({
+        conversationId,
+        messageId,
+        emoji,
+        operatorUuid,
+      }),
+    });
   }
 
   /**
@@ -452,13 +484,15 @@ export class IxblixClient {
   /**
    * Upload an encrypted media file from the company. `file.data` must be the
    * ciphertext bytes produced by the media encryption helper. Optionally pass
-   * the operator uuid so the media message is attributed to the operator.
+   * the operator uuid so the media message is attributed to the operator, and
+   * `replyToId` to send it as a reply to another message.
    */
   async sendCompanyMedia(
     conversationId: string,
     file: MediaUpload,
     envelope: MessageEnvelope,
     operatorUuid?: string,
+    replyToId?: string | null,
   ): Promise<Message> {
     const form = new FormData();
     form.append("conversationId", conversationId);
@@ -474,6 +508,9 @@ export class IxblixClient {
     form.append("keyId", envelope.keyId);
     if (operatorUuid) {
       form.append("operatorUuid", operatorUuid);
+    }
+    if (replyToId) {
+      form.append("replyToId", replyToId);
     }
 
     const headers: Record<string, string> = {};
