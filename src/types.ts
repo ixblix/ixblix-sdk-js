@@ -294,11 +294,17 @@ export interface Plan {
   id: string;
   name: string;
   description?: string;
-  billingType: "MESSAGES" | "CONVERSATIONS" | "COMPANY" | "TIME";
+  /**
+   * How the plan is billed. `MESSAGES` and `CONVERSATIONS` meter a quota and
+   * charge overage; `PERIOD` is a flat rate for the plan period.
+   */
+  billingType: "MESSAGES" | "CONVERSATIONS" | "PERIOD";
   includedConversations?: number | null;
   includedMessages?: number | null;
   durationDays?: number | null;
   priceCents: number;
+  /** ISO 4217 currency code the plan is priced in (e.g. `BRL`, `USD`). */
+  currency: string;
   overagePriceCents?: number | null;
   isActive: boolean;
   isPublic: boolean;
