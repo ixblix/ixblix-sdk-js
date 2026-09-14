@@ -25,17 +25,8 @@ export interface Contact {
   externalId: string;
   name?: string;
   metadata?: Record<string, unknown>;
-  /**
-   * LGPD consent status. Consent is memorized per company: once `GRANTED`, it
-   * is reused by every conversation with the same company and the customer is
-   * not asked again.
-   */
   consentStatus: ConsentStatus;
-  /**
-   * Timestamp of the first time the customer granted consent for this company.
-   * Absent/null when consent was never granted.
-   */
-  consentedAt?: string | null;
+  consentedAt?: string;
 }
 
 /** Payload used to create a conversation for a contact. */
@@ -229,6 +220,8 @@ export interface Message {
   clientMessageId?: string | null;
   /** Identifier of the operator that sent this message (COMPANY-sent only). */
   operatorUuid?: string;
+  /** Identity of the operator that sent this message (COMPANY-sent only). */
+  operator?: Operator;
   /**
    * Identifier of the message this one replies to, when it is a reply.
    * Absent/null when the message is not a reply.
@@ -262,14 +255,19 @@ export interface MessageReaction {
   createdAt: string;
 }
 
-/** Result of adding, replacing or removing a message reaction. */
+/** Result of adding, replacing or removing an emoji reaction. */
 export interface MessageReactionResult {
-  id: string;
+  conversationId: string;
   messageId: string;
+  /** The message's reactions after the change. */
+  reactions: MessageReaction[];
+  /** `added` when a reaction was set or replaced, `removed` when cleared. */
+  action: "added" | "removed";
+  /** The emoji that was set, or null when removed. */
   emoji: string | null;
   senderType: SenderType;
   operatorUuid?: string | null;
-  createdAt: string;
+  reactedAt: string;
 }
 
 /** Metadata of a media file attached to a message. */
@@ -294,17 +292,11 @@ export interface Plan {
   id: string;
   name: string;
   description?: string;
-  /**
-   * How the plan is billed. `MESSAGES` and `CONVERSATIONS` meter a quota and
-   * charge overage; `PERIOD` is a flat rate for the plan period.
-   */
-  billingType: "MESSAGES" | "CONVERSATIONS" | "PERIOD";
+  billingType: "MESSAGES" | "CONVERSATIONS" | "COMPANY" | "TIME";
   includedConversations?: number | null;
   includedMessages?: number | null;
   durationDays?: number | null;
   priceCents: number;
-  /** ISO 4217 currency code the plan is priced in (e.g. `BRL`, `USD`). */
-  currency: string;
   overagePriceCents?: number | null;
   isActive: boolean;
   isPublic: boolean;
@@ -318,6 +310,10 @@ export interface RegisterCompanyInput {
   planId?: string;
   paymentProvider?: string;
   confirmationWebhookUrl?: string;
+  /** Contact e-mail forwarded to the gateway as the checkout customer e-mail. */
+  email?: string;
+  /** Tax id (CPF/CNPJ) required by some gateways such as Asaas. */
+  taxId?: string;
 }
 
 /** Payment instructions returned when registering a company. */
@@ -328,6 +324,11 @@ export interface PaymentInstructions {
   currency: string;
   confirmationUrl: string;
   status: string;
+  /**
+   * Hosted checkout URL the customer must be redirected to. Absent for free
+   * plans and for providers that settle the charge inline.
+   */
+  checkoutUrl?: string;
 }
 
 /** Result of registering a company. */
