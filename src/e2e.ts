@@ -53,11 +53,17 @@ function assert(condition: boolean, message: string): void {
 async function main(): Promise<void> {
   // 1. Company onboarding via the SDK.
   const bootstrap = new IxblixClient({ baseUrl: BASE_URL });
+  const plans = await bootstrap.listPlans();
+  const defaultPlan = plans.find((plan) => plan.isActive && plan.isPublic);
+  if (!defaultPlan) {
+    throw new Error("No active public plan found. Seed the backend first.");
+  }
+
   const handle = `sdk-e2e-${Date.now()}`;
   const register = await bootstrap.registerCompany({
     name: "SDK E2E Test",
     handle,
-    paymentProvider: "dummy",
+    planId: defaultPlan.id,
   });
   const activate = await bootstrap.activateCompany(
     register.company.id,

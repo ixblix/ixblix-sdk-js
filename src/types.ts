@@ -308,7 +308,6 @@ export interface RegisterCompanyInput {
   name: string;
   handle: string;
   planId?: string;
-  paymentProvider?: string;
   confirmationWebhookUrl?: string;
   /** Contact e-mail forwarded to the gateway as the checkout customer e-mail. */
   email?: string;

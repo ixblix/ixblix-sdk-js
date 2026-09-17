@@ -154,10 +154,13 @@ Register a company (keyless), then activate it after payment to obtain the API
 key:
 
 ```ts
+const plans = await ixblix.listPlans();
+const plan = plans.find((p) => p.isActive && p.isPublic);
+
 const { company, payment } = await ixblix.registerCompany({
   name: "Acme CRM",
   handle: "acme-crm",
-  paymentProvider: "dummy",
+  planId: plan?.id,
 });
 
 // After the payment is confirmed:
