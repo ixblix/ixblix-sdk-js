@@ -39,6 +39,10 @@ export interface IxblixClientOptions {
   baseUrl: string;
   /** Company API key sent in the `X-API-Key` header. */
   apiKey?: string;
+  /** Integrator ID for HTTP Basic Auth (used for company registration/activation). */
+  integratorId?: string;
+  /** Integrator access token for HTTP Basic Auth. */
+  integratorAccessToken?: string;
   /** Optional custom fetch implementation (e.g. for testing or proxies). */
   fetch?: typeof fetch;
 }
@@ -79,11 +83,15 @@ export interface MediaDownload {
 export class IxblixClient {
   private readonly baseUrl: string;
   private readonly apiKey?: string;
+  private readonly integratorId?: string;
+  private readonly integratorAccessToken?: string;
   private readonly fetchImpl: typeof fetch;
 
   constructor(options: IxblixClientOptions) {
     this.baseUrl = options.baseUrl.replace(/\/+$/, "");
     this.apiKey = options.apiKey;
+    this.integratorId = options.integratorId;
+    this.integratorAccessToken = options.integratorAccessToken;
     this.fetchImpl = options.fetch ?? globalThis.fetch;
   }
 
@@ -98,6 +106,11 @@ export class IxblixClient {
     }
     if (this.apiKey) {
       headers["X-API-Key"] = this.apiKey;
+    }
+    if (this.integratorId && this.integratorAccessToken) {
+      const credentials = `${this.integratorId}:${this.integratorAccessToken}`;
+      const base64 = Buffer.from(credentials).toString("base64");
+      headers["Authorization"] = `Basic ${base64}`;
     }
     return headers;
   }
