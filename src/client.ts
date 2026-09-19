@@ -391,6 +391,7 @@ export class IxblixClient {
     contentType = "text",
     operatorUuid?: string,
     replyToId?: string | null,
+    attachments?: string | null,
   ): Promise<Message> {
     return this.request<Message>("/api/messages/company", {
       method: "POST",
@@ -405,6 +406,7 @@ export class IxblixClient {
         keyId: envelope.keyId,
         operatorUuid,
         replyToId: replyToId ?? undefined,
+        attachments: attachments ?? undefined,
       }),
     });
   }
