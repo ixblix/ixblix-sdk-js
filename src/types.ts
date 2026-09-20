@@ -235,13 +235,6 @@ export interface Message {
   replyTo?: Message | null;
   /** Emoji reactions attached to this message. */
   reactions?: MessageReaction[];
-  /**
-   * Encrypted JSON string containing rich message attachments (buttons, vcard,
-   * location). Only COMPANY-sent messages may include attachments.
-   */
-  attachments?: string | null;
-  /** Location preview metadata, when the message carries a location. */
-  locationPreview?: LocationPreview | null;
   sentAt: string;
 }
 
@@ -285,20 +278,6 @@ export interface Media {
   messageId?: string;
   mimeType: string;
   fileName: string;
-  sizeBytes: number;
-  iv?: string;
-  authTag?: string;
-  encryptedKey?: string;
-  selfEncryptedKey?: string;
-  keyId?: string;
-  createdAt: string;
-}
-
-/** Encrypted location preview image attached to a location message. */
-export interface LocationPreview {
-  id: string;
-  messageId: string;
-  mimeType: string;
   sizeBytes: number;
   iv?: string;
   authTag?: string;
