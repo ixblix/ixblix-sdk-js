@@ -28,6 +28,8 @@ export {
   importPublicKey,
   encryptToRecipient,
   decryptEnvelope,
+  encryptRichMessage,
+  decryptAttachments,
   encryptMediaToRecipient,
   decryptMediaEnvelope,
 } from "./crypto.js";

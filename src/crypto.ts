@@ -208,6 +208,142 @@ export function decryptEnvelope(
 }
 
 /**
+ * Encrypt a rich message (content + optional attachments) to the recipient's
+ * RSA public key.
+ *
+ * Uses a single AES-256-GCM key per message. The content and the attachments
+ * JSON are encrypted with different IVs so the nonce is never reused. The
+ * attachments blob embeds its own IV and authTag, so no extra schema fields
+ * are required.
+ */
+export function encryptRichMessage(
+  content: string,
+  attachments: string | null,
+  recipientPublicKeySpki: string,
+  senderKeyId: string,
+  senderPublicKeySpki: string,
+): {
+  content: string;
+  attachments: string | null;
+  iv: string;
+  authTag: string;
+  encryptedKey: string;
+  selfEncryptedKey: string;
+  keyId: string;
+} {
+  const recipientKey = importPublicKey(recipientPublicKeySpki);
+  const senderKey = importPublicKey(senderPublicKeySpki);
+
+  const aesKey = randomBytes(32);
+  const contentIv = randomBytes(12);
+
+  const contentCipher = createCipheriv("aes-256-gcm", aesKey, contentIv);
+  const contentCiphertext = Buffer.concat([
+    contentCipher.update(content, "utf8"),
+    contentCipher.final(),
+  ]);
+  const contentAuthTag = contentCipher.getAuthTag();
+
+  let encryptedAttachments: string | null = null;
+  if (attachments) {
+    const attachmentsIv = randomBytes(12);
+    const attachmentsCipher = createCipheriv(
+      "aes-256-gcm",
+      aesKey,
+      attachmentsIv,
+    );
+    const attachmentsCiphertext = Buffer.concat([
+      attachmentsCipher.update(attachments, "utf8"),
+      attachmentsCipher.final(),
+    ]);
+    const attachmentsAuthTag = attachmentsCipher.getAuthTag();
+    const combined = Buffer.concat([
+      attachmentsIv,
+      attachmentsAuthTag,
+      attachmentsCiphertext,
+    ]);
+    encryptedAttachments = bytesToBase64(new Uint8Array(combined));
+  }
+
+  const encryptedKey = publicEncrypt(
+    {
+      key: recipientKey,
+      padding: constants.RSA_PKCS1_OAEP_PADDING,
+      oaepHash: "sha256",
+    },
+    aesKey,
+  );
+  const selfEncryptedKey = publicEncrypt(
+    {
+      key: senderKey,
+      padding: constants.RSA_PKCS1_OAEP_PADDING,
+      oaepHash: "sha256",
+    },
+    aesKey,
+  );
+
+  return {
+    content: bytesToBase64(new Uint8Array(contentCiphertext)),
+    attachments: encryptedAttachments,
+    iv: bytesToBase64(new Uint8Array(contentIv)),
+    authTag: bytesToBase64(new Uint8Array(contentAuthTag)),
+    encryptedKey: bytesToBase64(new Uint8Array(encryptedKey)),
+    selfEncryptedKey: bytesToBase64(new Uint8Array(selfEncryptedKey)),
+    keyId: senderKeyId,
+  };
+}
+
+/**
+ * Decrypt the attachments blob of a rich message.
+ *
+ * The attachments blob is `base64(iv || authTag || ciphertext)`. The AES key
+ * is unwrapped from the message envelope using the operator's private key.
+ */
+export function decryptAttachments(
+  attachmentsBlob: string,
+  envelope: {
+    encryptedKey?: string;
+    selfEncryptedKey?: string;
+  },
+  privateKey: KeyObject,
+): string | null {
+  const wrappedKeys = [envelope.encryptedKey, envelope.selfEncryptedKey].filter(
+    (key): key is string => Boolean(key),
+  );
+
+  const bytes = Buffer.from(base64ToBytes(attachmentsBlob));
+  if (bytes.length < 28) {
+    return null;
+  }
+  const iv = bytes.subarray(0, 12);
+  const authTag = bytes.subarray(12, 28);
+  const ciphertext = bytes.subarray(28);
+
+  for (const wrappedKey of wrappedKeys) {
+    try {
+      const aesKey = privateDecrypt(
+        {
+          key: privateKey,
+          padding: constants.RSA_PKCS1_OAEP_PADDING,
+          oaepHash: "sha256",
+        },
+        Buffer.from(base64ToBytes(wrappedKey)),
+      );
+      const decipher = createDecipheriv("aes-256-gcm", aesKey, iv);
+      decipher.setAuthTag(authTag);
+      const plaintext = Buffer.concat([
+        decipher.update(ciphertext),
+        decipher.final(),
+      ]);
+      return plaintext.toString("utf8");
+    } catch {
+      // Try the next wrapped key.
+    }
+  }
+  return null;
+}
+
+/**
  * Encrypt a binary media file (image/audio/document) to the recipient's RSA
  * public key. Uses a fresh AES-256-GCM key wrapped to both the recipient and
  * the sender (for self-read). Returns the envelope fields plus the base64
