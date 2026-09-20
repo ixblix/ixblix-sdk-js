@@ -235,6 +235,11 @@ export interface Message {
   replyTo?: Message | null;
   /** Emoji reactions attached to this message. */
   reactions?: MessageReaction[];
+  /**
+   * Encrypted JSON string containing rich message attachments (buttons, vcard,
+   * location, linkPreview). Only COMPANY-sent messages may include attachments.
+   */
+  attachments?: string | null;
   sentAt: string;
 }
 

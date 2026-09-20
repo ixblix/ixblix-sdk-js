@@ -499,8 +499,9 @@ export class IxblixClient {
   /**
    * Upload an encrypted media file from the company. `file.data` must be the
    * ciphertext bytes produced by the media encryption helper. Optionally pass
-   * the operator uuid so the media message is attributed to the operator, and
-   * `replyToId` to send it as a reply to another message.
+   * the operator uuid so the media message is attributed to the operator,
+   * `replyToId` to send it as a reply to another message, and `attachments`
+   * for rich message attachments (encrypted JSON string).
    */
   async sendCompanyMedia(
     conversationId: string,
@@ -508,6 +509,7 @@ export class IxblixClient {
     envelope: MessageEnvelope,
     operatorUuid?: string,
     replyToId?: string | null,
+    attachments?: string | null,
   ): Promise<Message> {
     const form = new FormData();
     form.append("conversationId", conversationId);
@@ -526,6 +528,9 @@ export class IxblixClient {
     }
     if (replyToId) {
       form.append("replyToId", replyToId);
+    }
+    if (attachments) {
+      form.append("attachments", attachments);
     }
 
     const headers: Record<string, string> = {};
