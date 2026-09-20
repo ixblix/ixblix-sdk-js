@@ -400,7 +400,95 @@ export function encryptMediaToRecipient(
 }
 
 /**
- * Decrypt a media envelope using the operator's private key. Tries the
+ * Encrypt a binary media file AND rich-message attachments with a single
+ * AES-256-GCM key.
+ *
+ * The media content and the attachments JSON are encrypted with different IVs
+ * so the nonce is never reused, but they share the same AES key. The key is
+ * wrapped (RSA-OAEP/SHA-256) both to the recipient and to the sender so either
+ * party can decrypt. The attachments blob embeds its own IV and authTag.
+ *
+ * This is the correct way to send a media message that also carries rich
+ * attachments (linkPreview, location, buttons, …): using two separate
+ * `encryptMediaToRecipient` + `encryptRichMessage` calls would produce two
+ * independent AES keys, and the recipient would be unable to decrypt the
+ * attachments because the message envelope only carries the media key.
+ */
+export function encryptMediaWithAttachments(
+  fileBytes: Uint8Array,
+  attachments: string,
+  recipientPublicKeySpki: string,
+  senderKeyId: string,
+  senderPublicKeySpki: string,
+): {
+  content: string;
+  iv: string;
+  authTag: string;
+  encryptedKey: string;
+  selfEncryptedKey: string;
+  keyId: string;
+  encryptedAttachments: string;
+} {
+  const recipientKey = importPublicKey(recipientPublicKeySpki);
+  const senderKey = importPublicKey(senderPublicKeySpki);
+
+  const aesKey = randomBytes(32);
+
+  // Encrypt the media file
+  const mediaIv = randomBytes(12);
+  const mediaCipher = createCipheriv("aes-256-gcm", aesKey, mediaIv);
+  const mediaCiphertext = Buffer.concat([
+    mediaCipher.update(fileBytes),
+    mediaCipher.final(),
+  ]);
+  const mediaAuthTag = mediaCipher.getAuthTag();
+
+  // Encrypt the attachments with a different IV but the same key
+  const attachmentsIv = randomBytes(12);
+  const attachmentsCipher = createCipheriv("aes-256-gcm", aesKey, attachmentsIv);
+  const attachmentsCiphertext = Buffer.concat([
+    attachmentsCipher.update(attachments, "utf8"),
+    attachmentsCipher.final(),
+  ]);
+  const attachmentsAuthTag = attachmentsCipher.getAuthTag();
+  const combined = Buffer.concat([
+    attachmentsIv,
+    attachmentsAuthTag,
+    attachmentsCiphertext,
+  ]);
+  const encryptedAttachments = bytesToBase64(new Uint8Array(combined));
+
+  // Wrap the AES key to both recipient and sender
+  const encryptedKey = publicEncrypt(
+    {
+      key: recipientKey,
+      padding: constants.RSA_PKCS1_OAEP_PADDING,
+      oaepHash: "sha256",
+    },
+    aesKey,
+  );
+  const selfEncryptedKey = publicEncrypt(
+    {
+      key: senderKey,
+      padding: constants.RSA_PKCS1_OAEP_PADDING,
+      oaepHash: "sha256",
+    },
+    aesKey,
+  );
+
+  return {
+    content: bytesToBase64(new Uint8Array(mediaCiphertext)),
+    iv: bytesToBase64(new Uint8Array(mediaIv)),
+    authTag: bytesToBase64(new Uint8Array(mediaAuthTag)),
+    encryptedKey: bytesToBase64(new Uint8Array(encryptedKey)),
+    selfEncryptedKey: bytesToBase64(new Uint8Array(selfEncryptedKey)),
+    keyId: senderKeyId,
+    encryptedAttachments,
+  };
+}
+
+/**
+ * Decrypt a media envelope using the operator's private key. Tries the wrapped key first, then the sender-wrapped key. Returns the
  * recipient-wrapped key first, then the sender-wrapped key. Returns the
  * plaintext file bytes, or null when decryption fails.
  */

@@ -31,6 +31,7 @@ export {
   encryptRichMessage,
   decryptAttachments,
   encryptMediaToRecipient,
+  encryptMediaWithAttachments,
   decryptMediaEnvelope,
 } from "./crypto.js";
 export type { OperatorKeyPair, GenerateKeyPairOptions } from "./crypto.js";
