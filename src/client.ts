@@ -6,6 +6,8 @@
  * endpoints (plans, payment providers) do not require an API key.
  */
 import { IxblixError } from "./errors.js";
+import { encryptToRecipient } from "./crypto.js";
+import type { OperatorKeyPair } from "./crypto.js";
 import type {
   ActivateCompanyResult,
   CompanyBalance,
@@ -20,7 +22,6 @@ import type {
   Media,
   Message,
   MessageEnvelope,
-  MessageReactionResult,
   OperatorInput,
   OriginalChannelMessageInput,
   PaymentProvidersResult,
@@ -43,6 +44,8 @@ export interface IxblixClientOptions {
   integratorId?: string;
   /** Integrator access token for HTTP Basic Auth. */
   integratorAccessToken?: string;
+  /** Operator RSA keypair used to encrypt outgoing messages/reactions. */
+  operatorKey?: OperatorKeyPair;
   /** Optional custom fetch implementation (e.g. for testing or proxies). */
   fetch?: typeof fetch;
 }
@@ -86,12 +89,14 @@ export class IxblixClient {
   private readonly integratorId?: string;
   private readonly integratorAccessToken?: string;
   private readonly fetchImpl: typeof fetch;
+  private readonly operatorKey?: OperatorKeyPair;
 
   constructor(options: IxblixClientOptions) {
     this.baseUrl = options.baseUrl.replace(/\/+$/, "");
     this.apiKey = options.apiKey;
     this.integratorId = options.integratorId;
     this.integratorAccessToken = options.integratorAccessToken;
+    this.operatorKey = options.operatorKey;
     this.fetchImpl = options.fetch ?? globalThis.fetch;
   }
 
@@ -421,27 +426,44 @@ export class IxblixClient {
   }
 
   /**
-   * Add, replace or remove an emoji reaction on a message as the operator.
-   * A reactor holds at most one reaction per message; pass an empty `emoji` to
-   * remove the operator's existing reaction. Emits a `message_reaction`
-   * Socket.io event to the customer's chat app and a `MESSAGE_REACTION`
-   * webhook to the operator.
+   * React to a message as the operator. The emoji is encrypted to the
+   * customer's public key and sent as a regular message with
+   * contentType="react" and replyToId pointing to the target message. Pass an
+   * empty `emoji` to clear the operator's reaction. The caller's SDK instance
+   * must hold an operator keypair (see `loadOrCreateOperatorKey`).
    */
-  reactToMessage(
+  async reactToMessage(
     conversationId: string,
     messageId: string,
     emoji: string,
     operatorUuid?: string,
-  ): Promise<MessageReactionResult> {
-    return this.request<MessageReactionResult>("/api/messages/company/react", {
-      method: "POST",
-      body: JSON.stringify({
-        conversationId,
-        messageId,
-        emoji,
-        operatorUuid,
-      }),
-    });
+  ): Promise<Message> {
+    const keys = await this.getConversationKeys(conversationId);
+    if (!keys.customerPublicKey) {
+      throw new IxblixError(
+        "Customer has not joined the secure conversation yet",
+        { status: 409, code: "KEYS_NOT_ACTIVE" },
+      );
+    }
+    if (!this.operatorKey) {
+      throw new IxblixError(
+        "Operator keypair is required to send encrypted reactions",
+        { status: 400, code: "MISSING_OPERATOR_KEY" },
+      );
+    }
+    const envelope = encryptToRecipient(
+      emoji,
+      keys.customerPublicKey,
+      this.operatorKey.keyId,
+      this.operatorKey.publicKeySpki,
+    );
+    return this.sendCompanyMessage(
+      conversationId,
+      envelope,
+      "react",
+      operatorUuid,
+      messageId,
+    );
   }
 
   /**
