@@ -24,12 +24,18 @@ import type {
   MessageEnvelope,
   OperatorInput,
   OriginalChannelMessageInput,
+  PaymentChangeOptions,
+  PaymentMethod,
   PaymentProvidersResult,
   Plan,
   PurchaseCreditsResult,
   RegisterCompanyEncryptionKeyInput,
   RegisterCompanyInput,
   RegisterCompanyResult,
+  RegisterIntegratorInput,
+  RegisterIntegratorResult,
+  StartPaymentChangeInput,
+  StartPaymentChangeResult,
   UpdateOperatorResult,
   IxblixErrorBody,
 } from "./types.js";
@@ -147,6 +153,24 @@ export class IxblixClient {
   }
 
   // ---------------------------------------------------------------------------
+  // Integrator onboarding
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Register a new integrator platform. ixblix will POST the integrator
+   * credentials (`integratorId` and `accessToken`) to the provided callback URL,
+   * which must echo the payload back with status 200 to complete verification.
+   */
+  registerIntegrator(
+    input: RegisterIntegratorInput,
+  ): Promise<RegisterIntegratorResult> {
+    return this.request<RegisterIntegratorResult>("/api/integrators/register", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  }
+
+  // ---------------------------------------------------------------------------
   // Company onboarding
   // ---------------------------------------------------------------------------
 
@@ -216,6 +240,37 @@ export class IxblixClient {
   /** List the authenticated company's credit purchases. */
   listCreditPurchases(): Promise<CreditPurchase[]> {
     return this.request<CreditPurchase[]>("/api/companies/credits/purchases");
+  }
+
+  /** List the authenticated company's stored payment methods, default first. */
+  listPaymentMethods(): Promise<PaymentMethod[]> {
+    return this.request<PaymentMethod[]>("/api/companies/payment-methods");
+  }
+
+  /**
+   * Fetch the available payment instruments for a company wanting to
+   * re-subscribe or switch payment methods.
+   */
+  getPaymentChangeOptions(): Promise<PaymentChangeOptions> {
+    return this.request<PaymentChangeOptions>(
+      "/api/companies/payment-change/options",
+    );
+  }
+
+  /**
+   * Start a payment change checkout for the authenticated company. Returns
+   * a transaction id and hosted checkout URL to redirect the company owner.
+   */
+  startPaymentChange(
+    input?: StartPaymentChangeInput,
+  ): Promise<StartPaymentChangeResult> {
+    return this.request<StartPaymentChangeResult>(
+      "/api/companies/payment-change/start",
+      {
+        method: "POST",
+        body: JSON.stringify(input ?? {}),
+      },
+    );
   }
 
   /**

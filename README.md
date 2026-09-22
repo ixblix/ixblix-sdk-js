@@ -148,6 +148,31 @@ The returned `Message` objects include an `operatorUuid` field on
 company-sent messages, and the conversation payloads include the full
 `operator` object so the customer's client can render the avatar.
 
+## Integrator onboarding
+
+Register your platform as an integrator to receive company-scoped credentials.
+ixblix will POST the credentials to the callback URL, which must echo the
+payload back with status 200 to complete verification.
+
+```ts
+const integratorClient = new IxblixClient({
+  baseUrl: "https://api.ixblix.app",
+});
+
+await integratorClient.registerIntegrator({
+  name: "Acme Desk",
+  hostname: "desk.acme.example",
+  callbackUrl: "https://desk.acme.example/ixblix/callback",
+});
+
+// Use the credentials from the callback to create an authenticated client:
+const client = new IxblixClient({
+  baseUrl: "https://api.ixblix.app",
+  integratorId,
+  integratorAccessToken,
+});
+```
+
 ## Company onboarding
 
 Register a company (keyless), then activate it after payment to obtain the API
@@ -168,6 +193,21 @@ const { apiKey } = await ixblix.activateCompany(
   company.id,
   payment.transactionId,
 );
+```
+
+## Payment management
+
+List stored payment methods and start a payment-method or plan change checkout:
+
+```ts
+const methods = await ixblix.listPaymentMethods();
+const defaultMethod = methods.find((m) => m.isDefault);
+
+const options = await ixblix.getPaymentChangeOptions();
+
+// Optionally pass a planId to switch plans:
+const change = await ixblix.startPaymentChange({ planId: options.planId });
+console.log("Redirect to:", change.checkoutUrl);
 ```
 
 ## End-to-end encryption

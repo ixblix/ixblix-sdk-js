@@ -356,6 +356,69 @@ export interface PurchaseCreditsResult {
   };
 }
 
+/** Input to register a new integrator platform. */
+export interface RegisterIntegratorInput {
+  /** Display name of the integrator platform. */
+  name: string;
+  /** Unique hostname for this integrator. Must be unique across all integrators. */
+  hostname: string;
+  /** URL where ixblix will POST the integrator credentials for verification. */
+  callbackUrl: string;
+  /** If true, allows replacing an existing verified hostname registration. */
+  force?: boolean;
+  /** Subscription id in the format `{paymentProvider}:{id}` when required. */
+  subscriptionId?: string;
+}
+
+/** Result of registering an integrator. */
+export interface RegisterIntegratorResult {
+  success: boolean;
+  message: string;
+}
+
+/** A stored payment method for off-session charges. */
+export interface PaymentMethod {
+  id: string;
+  provider: string;
+  type: "CARD" | "PIX_AUTOMATIC_AUTHORIZATION";
+  brand?: string | null;
+  last4?: string | null;
+  expMonth?: number | null;
+  expYear?: number | null;
+  holderName?: string | null;
+  isDefault: boolean;
+  status: "ACTIVE" | "DETACHED";
+  createdAt: string;
+}
+
+/** Available payment instruments for a company wanting to re-subscribe or switch methods. */
+export interface PaymentChangeOptions {
+  card: boolean;
+  pixAutomatic: boolean;
+  pixAutomaticCycle?: string | null;
+  pixAutomaticUnavailableReason?: string | null;
+  currentPlanExpiresAt?: string | null;
+  stillActive: boolean;
+  currentPaymentMethodType?: string | null;
+}
+
+/** Input to start a payment change checkout. */
+export interface StartPaymentChangeInput {
+  /** Subscription plan to re-subscribe to or switch to. Uses the current plan when omitted. */
+  planId?: string;
+}
+
+/** Result of starting a payment change checkout. */
+export interface StartPaymentChangeResult {
+  transactionId: string;
+  provider: string;
+  amountCents: number;
+  currency: string;
+  confirmationUrl: string;
+  status: string;
+  checkoutUrl: string;
+}
+
 /** Available payment providers. */
 export interface PaymentProvidersResult {
   providers: string[];
