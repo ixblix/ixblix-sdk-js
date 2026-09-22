@@ -157,9 +157,14 @@ export class IxblixClient {
   // ---------------------------------------------------------------------------
 
   /**
-   * Register a new integrator platform. ixblix will POST the integrator
-   * credentials (`integratorId` and `accessToken`) to the provided callback URL,
-   * which must echo the payload back with status 200 to complete verification.
+   * Register a new integrator platform. The backend performs a three-phase
+   * verification:
+   * 1. Accepts the registration payload.
+   * 2. POSTs `{ challenge: <hostname> }` to the callback URL; the callback must
+   *    respond with the exact registration payload to prove it controls the
+   *    hostname.
+   * 3. POSTs the credentials (`integratorId` and `accessToken`) to the callback,
+   *    which must echo them back with status 200.
    */
   registerIntegrator(
     input: RegisterIntegratorInput,

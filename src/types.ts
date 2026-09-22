@@ -362,7 +362,12 @@ export interface RegisterIntegratorInput {
   name: string;
   /** Unique hostname for this integrator. Must be unique across all integrators. */
   hostname: string;
-  /** URL where ixblix will POST the integrator credentials for verification. */
+  /**
+   * URL where ixblix will POST the registration challenge and, after the
+   * challenge succeeds, the integrator credentials. The callback must first
+   * echo the original registration payload in response to the challenge, then
+   * echo the credentials payload.
+   */
   callbackUrl: string;
   /** If true, allows replacing an existing verified hostname registration. */
   force?: boolean;
