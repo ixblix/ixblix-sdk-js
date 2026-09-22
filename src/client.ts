@@ -2,8 +2,8 @@
  * Typed HTTP client for the ixblix public REST API.
  *
  * All methods that operate on behalf of a company authenticate with the
- * `X-API-Key` header. Company onboarding (register/activate) and public
- * endpoints (plans, payment providers) do not require an API key.
+ * `X-API-Key` header. Company onboarding (register/activate) uses integrator
+ * HTTP Basic Auth. The plans endpoint requires integrator authentication.
  */
 import { IxblixError } from "./errors.js";
 import { encryptToRecipient } from "./crypto.js";
