@@ -15,6 +15,8 @@ export const WEBHOOK_SIGNATURE_HEADER = "X-Ixblix-Signature";
 export const WEBHOOK_ID_HEADER = "X-Ixblix-Event-Id";
 /** Header carrying the event type. */
 export const WEBHOOK_EVENT_HEADER = "X-Ixblix-Event";
+/** Header carrying the company id (for multi-tenant receivers). */
+export const WEBHOOK_COMPANY_ID_HEADER = "X-Ixblix-Company-Id";
 
 /** Result of parsing a webhook payload. */
 export interface ParsedWebhook<T extends WebhookEvent = WebhookEvent> {

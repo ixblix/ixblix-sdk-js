@@ -44,6 +44,7 @@ export {
   WEBHOOK_SIGNATURE_HEADER,
   WEBHOOK_ID_HEADER,
   WEBHOOK_EVENT_HEADER,
+  WEBHOOK_COMPANY_ID_HEADER,
 } from "./webhooks.js";
 
 export type {
