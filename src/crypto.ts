@@ -216,9 +216,24 @@ export function decryptEnvelope(
  * attachments blob embeds its own IV and authTag, so no extra schema fields
  * are required.
  */
+import type { MessageAttachments } from "./types.js";
+
+/**
+ * Encrypt a rich message (content + optional attachments) to the recipient's
+ * RSA public key.
+ *
+ * Uses a single AES-256-GCM key per message. The content and the attachments
+ * JSON are encrypted with different IVs so the nonce is never reused. The
+ * attachments blob embeds its own IV and authTag, so no extra schema fields
+ * are required.
+ *
+ * `attachments` is accepted as a typed object ({@link MessageAttachments}) and
+ * stringified internally before encryption, so callers never have to
+ * JSON.stringify manually.
+ */
 export function encryptRichMessage(
   content: string,
-  attachments: string | null,
+  attachments: MessageAttachments | null,
   recipientPublicKeySpki: string,
   senderKeyId: string,
   senderPublicKeySpki: string,
@@ -246,6 +261,7 @@ export function encryptRichMessage(
 
   let encryptedAttachments: string | null = null;
   if (attachments) {
+    const attachmentsJson = JSON.stringify(attachments);
     const attachmentsIv = randomBytes(12);
     const attachmentsCipher = createCipheriv(
       "aes-256-gcm",
@@ -253,7 +269,7 @@ export function encryptRichMessage(
       attachmentsIv,
     );
     const attachmentsCiphertext = Buffer.concat([
-      attachmentsCipher.update(attachments, "utf8"),
+      attachmentsCipher.update(attachmentsJson, "utf8"),
       attachmentsCipher.final(),
     ]);
     const attachmentsAuthTag = attachmentsCipher.getAuthTag();
@@ -416,7 +432,7 @@ export function encryptMediaToRecipient(
  */
 export function encryptMediaWithAttachments(
   fileBytes: Uint8Array,
-  attachments: string,
+  attachments: MessageAttachments,
   recipientPublicKeySpki: string,
   senderKeyId: string,
   senderPublicKeySpki: string,
@@ -444,10 +460,15 @@ export function encryptMediaWithAttachments(
   const mediaAuthTag = mediaCipher.getAuthTag();
 
   // Encrypt the attachments with a different IV but the same key
+  const attachmentsJson = JSON.stringify(attachments);
   const attachmentsIv = randomBytes(12);
-  const attachmentsCipher = createCipheriv("aes-256-gcm", aesKey, attachmentsIv);
+  const attachmentsCipher = createCipheriv(
+    "aes-256-gcm",
+    aesKey,
+    attachmentsIv,
+  );
   const attachmentsCiphertext = Buffer.concat([
-    attachmentsCipher.update(attachments, "utf8"),
+    attachmentsCipher.update(attachmentsJson, "utf8"),
     attachmentsCipher.final(),
   ]);
   const attachmentsAuthTag = attachmentsCipher.getAuthTag();

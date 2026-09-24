@@ -19,6 +19,47 @@ export type ConversationStatus = "ACTIVE" | "CLOSED" | "EXPIRED";
 /** Consent state of a contact (LGPD). */
 export type ConsentStatus = "PENDING" | "GRANTED" | "DENIED" | "REVOKED";
 
+/**
+ * Rich message attachment types. The `attachments` field on a message is an
+ * encrypted JSON string that, once decrypted and parsed, yields this shape.
+ * The SDK accepts this object directly in `encryptRichMessage` and
+ * `encryptMediaWithAttachments`; it stringifies before encrypting.
+ */
+export interface MessageAttachments {
+  /** Operator identity embedded for per-message avatar rendering. */
+  operator?: Operator;
+  buttons?: MessageButton[];
+  vcard?: MessageVcard;
+  location?: MessageLocation;
+  linkPreview?: MessageLinkPreview;
+}
+
+export type MessageButton =
+  | { type: "reply"; label: string }
+  | { type: "url"; label: string; url: string }
+  | { type: "copy"; label: string; value: string }
+  | { type: "pix"; label: string; value: string };
+
+export interface MessageVcard {
+  name: string;
+  phone: string;
+  organization?: string;
+}
+
+export interface MessageLocation {
+  latitude: number;
+  longitude: number;
+  name?: string;
+  address?: string;
+}
+
+export interface MessageLinkPreview {
+  url: string;
+  title?: string;
+  siteName?: string;
+  description?: string;
+}
+
 /** A contact (customer) in a conversation. */
 export interface Contact {
   id: string;
