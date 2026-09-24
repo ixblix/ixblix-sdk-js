@@ -27,11 +27,9 @@ export {
   generateOperatorKeyPair,
   importPublicKey,
   encryptToRecipient,
+  encryptMessagePayload,
   decryptEnvelope,
-  encryptRichMessage,
   decryptAttachments,
-  encryptMediaToRecipient,
-  encryptMediaWithAttachments,
   decryptMediaEnvelope,
 } from "./crypto.js";
 export type { OperatorKeyPair, GenerateKeyPairOptions } from "./crypto.js";
@@ -74,6 +72,7 @@ export type {
   MessageLocation,
   MessageLinkPreview,
   MessageEnvelope,
+  MessagePayload,
   Message,
   Media,
   Plan,

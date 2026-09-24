@@ -230,6 +230,47 @@ export interface MessageEnvelope {
   selfEncryptedKey: string;
   /** Identifier of the sender's public key. */
   keyId: string;
+  /**
+   * Optional encrypted JSON string containing rich message attachments
+   * (buttons, vcard, location, operator identity). Only present on
+   * COMPANY-sent messages.
+   */
+  attachments?: string;
+}
+
+/**
+ * Result of encrypting a full message payload (content + optional media +
+ * optional attachments) with a single AES-256-GCM key.
+ *
+ * Each encrypted part uses a distinct IV but shares the same AES key, which is
+ * wrapped (RSA-OAEP/SHA-256) to both the recipient and the sender. The media
+ * file has its own IV/authTag so the recipient can decrypt it independently
+ * from the content caption.
+ */
+export interface MessagePayload {
+  /** Base64 AES-256-GCM ciphertext of the plaintext content (caption). */
+  content: string;
+  /** Base64 AES-GCM IV for the content ciphertext. */
+  contentIv: string;
+  /** Base64 AES-GCM auth tag for the content ciphertext. */
+  contentAuthTag: string;
+  /** Base64 AES-256-GCM ciphertext of the media file (present when file was provided). */
+  mediaContent?: string;
+  /** Base64 AES-GCM IV for the media ciphertext. */
+  mediaIv?: string;
+  /** Base64 AES-GCM auth tag for the media ciphertext. */
+  mediaAuthTag?: string;
+  /**
+   * Optional encrypted JSON string containing rich message attachments
+   * (buttons, vcard, location, operator identity).
+   */
+  attachments?: string;
+  /** Base64 RSA-OAEP-wrapped per-message AES key (to the recipient). */
+  encryptedKey: string;
+  /** Base64 RSA-OAEP-wrapped per-message AES key (to the sender, for self-read). */
+  selfEncryptedKey: string;
+  /** Identifier of the sender's public key. */
+  keyId: string;
 }
 
 /** A message as returned by the ixblix API. */

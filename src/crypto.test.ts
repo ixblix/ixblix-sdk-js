@@ -2,8 +2,8 @@ import { describe, it, expect } from "vitest";
 import {
   generateOperatorKeyPair,
   encryptToRecipient,
+  encryptMessagePayload,
   decryptEnvelope,
-  encryptMediaToRecipient,
   decryptMediaEnvelope,
 } from "./crypto.js";
 
@@ -49,12 +49,20 @@ describe("crypto", () => {
     const customer = generateOperatorKeyPair();
     const fileBytes = new Uint8Array([1, 2, 3, 4, 5, 250, 251, 252]);
 
-    const envelope = encryptMediaToRecipient(
-      fileBytes,
+    const payload = encryptMessagePayload(
+      { fileBytes },
       customer.publicKeySpki,
       operator.keyId,
       operator.publicKeySpki,
     );
+
+    const envelope = {
+      content: payload.mediaContent ?? "",
+      iv: payload.mediaIv ?? "",
+      authTag: payload.mediaAuthTag ?? "",
+      encryptedKey: payload.encryptedKey,
+      selfEncryptedKey: payload.selfEncryptedKey,
+    };
 
     const customerPlain = decryptMediaEnvelope(envelope, customer.privateKey);
     expect(customerPlain).not.toBeNull();

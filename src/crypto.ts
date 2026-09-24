@@ -26,6 +26,11 @@ import {
   constants,
   type KeyObject,
 } from "node:crypto";
+import type {
+  MessageEnvelope,
+  MessagePayload,
+  MessageAttachments,
+} from "./types.js";
 
 /** Encode a Buffer as a URL-safe base64 string (no padding). */
 function bytesToBase64(bytes: Uint8Array): string {
@@ -208,108 +213,6 @@ export function decryptEnvelope(
 }
 
 /**
- * Encrypt a rich message (content + optional attachments) to the recipient's
- * RSA public key.
- *
- * Uses a single AES-256-GCM key per message. The content and the attachments
- * JSON are encrypted with different IVs so the nonce is never reused. The
- * attachments blob embeds its own IV and authTag, so no extra schema fields
- * are required.
- */
-import type { MessageAttachments } from "./types.js";
-
-/**
- * Encrypt a rich message (content + optional attachments) to the recipient's
- * RSA public key.
- *
- * Uses a single AES-256-GCM key per message. The content and the attachments
- * JSON are encrypted with different IVs so the nonce is never reused. The
- * attachments blob embeds its own IV and authTag, so no extra schema fields
- * are required.
- *
- * `attachments` is accepted as a typed object ({@link MessageAttachments}) and
- * stringified internally before encryption, so callers never have to
- * JSON.stringify manually.
- */
-export function encryptRichMessage(
-  content: string,
-  attachments: MessageAttachments | null,
-  recipientPublicKeySpki: string,
-  senderKeyId: string,
-  senderPublicKeySpki: string,
-): {
-  content: string;
-  attachments: string | null;
-  iv: string;
-  authTag: string;
-  encryptedKey: string;
-  selfEncryptedKey: string;
-  keyId: string;
-} {
-  const recipientKey = importPublicKey(recipientPublicKeySpki);
-  const senderKey = importPublicKey(senderPublicKeySpki);
-
-  const aesKey = randomBytes(32);
-  const contentIv = randomBytes(12);
-
-  const contentCipher = createCipheriv("aes-256-gcm", aesKey, contentIv);
-  const contentCiphertext = Buffer.concat([
-    contentCipher.update(content, "utf8"),
-    contentCipher.final(),
-  ]);
-  const contentAuthTag = contentCipher.getAuthTag();
-
-  let encryptedAttachments: string | null = null;
-  if (attachments) {
-    const attachmentsJson = JSON.stringify(attachments);
-    const attachmentsIv = randomBytes(12);
-    const attachmentsCipher = createCipheriv(
-      "aes-256-gcm",
-      aesKey,
-      attachmentsIv,
-    );
-    const attachmentsCiphertext = Buffer.concat([
-      attachmentsCipher.update(attachmentsJson, "utf8"),
-      attachmentsCipher.final(),
-    ]);
-    const attachmentsAuthTag = attachmentsCipher.getAuthTag();
-    const combined = Buffer.concat([
-      attachmentsIv,
-      attachmentsAuthTag,
-      attachmentsCiphertext,
-    ]);
-    encryptedAttachments = bytesToBase64(new Uint8Array(combined));
-  }
-
-  const encryptedKey = publicEncrypt(
-    {
-      key: recipientKey,
-      padding: constants.RSA_PKCS1_OAEP_PADDING,
-      oaepHash: "sha256",
-    },
-    aesKey,
-  );
-  const selfEncryptedKey = publicEncrypt(
-    {
-      key: senderKey,
-      padding: constants.RSA_PKCS1_OAEP_PADDING,
-      oaepHash: "sha256",
-    },
-    aesKey,
-  );
-
-  return {
-    content: bytesToBase64(new Uint8Array(contentCiphertext)),
-    attachments: encryptedAttachments,
-    iv: bytesToBase64(new Uint8Array(contentIv)),
-    authTag: bytesToBase64(new Uint8Array(contentAuthTag)),
-    encryptedKey: bytesToBase64(new Uint8Array(encryptedKey)),
-    selfEncryptedKey: bytesToBase64(new Uint8Array(selfEncryptedKey)),
-    keyId: senderKeyId,
-  };
-}
-
-/**
  * Decrypt the attachments blob of a rich message.
  *
  * The attachments blob is `base64(iv || authTag || ciphertext)`. The AES key
@@ -360,34 +263,90 @@ export function decryptAttachments(
 }
 
 /**
- * Encrypt a binary media file (image/audio/document) to the recipient's RSA
- * public key. Uses a fresh AES-256-GCM key wrapped to both the recipient and
- * the sender (for self-read). Returns the envelope fields plus the base64
- * ciphertext of the file bytes.
+ * Encrypt a full message payload (content + optional media + optional
+ * attachments) with a single AES-256-GCM key.
+ *
+ * Each encrypted part uses a distinct IV so the nonce is never reused, but all
+ * share the same AES key. The key is wrapped (RSA-OAEP/SHA-256) both to the
+ * recipient and to the sender so either party can decrypt.
+ *
+ * This is the unified encryption entry point used by `sendEncryptedMessage`.
+ * Pass only the parts you need:
+ * - Text only: `content` → `mediaContent`/`mediaIv`/`mediaAuthTag` are omitted.
+ * - Media only: `fileBytes` → `content` is empty string, `contentIv`/`contentAuthTag` omitted.
+ * - Media + caption: both `content` and `fileBytes` → all fields populated.
+ * - Any combination + `attachments` → attachments blob always present when supplied.
  */
-export function encryptMediaToRecipient(
-  fileBytes: Uint8Array,
+export function encryptMessagePayload(
+  input: {
+    /** Plaintext content (caption for media messages). */
+    content?: string;
+    /** Plaintext media file bytes. */
+    fileBytes?: Uint8Array;
+    /** Rich message attachments (buttons, vcard, location, operator identity). */
+    attachments?: MessageAttachments | null;
+  },
   recipientPublicKeySpki: string,
   senderKeyId: string,
   senderPublicKeySpki: string,
-): {
-  content: string;
-  iv: string;
-  authTag: string;
-  encryptedKey: string;
-  selfEncryptedKey: string;
-  keyId: string;
-} {
+): MessagePayload {
   const recipientKey = importPublicKey(recipientPublicKeySpki);
   const senderKey = importPublicKey(senderPublicKeySpki);
 
+  // Single AES key for all parts.
   const aesKey = randomBytes(32);
-  const iv = randomBytes(12);
 
-  const cipher = createCipheriv("aes-256-gcm", aesKey, iv);
-  const ciphertext = Buffer.concat([cipher.update(fileBytes), cipher.final()]);
-  const authTag = cipher.getAuthTag();
+  // Encrypt content (caption) if provided.
+  let contentCiphertext = Buffer.alloc(0);
+  let contentIv = randomBytes(12);
+  let contentAuthTag = Buffer.alloc(0);
+  if (input.content) {
+    const contentCipher = createCipheriv("aes-256-gcm", aesKey, contentIv);
+    contentCiphertext = Buffer.concat([
+      contentCipher.update(input.content, "utf8"),
+      contentCipher.final(),
+    ]);
+    contentAuthTag = contentCipher.getAuthTag();
+  }
 
+  // Encrypt media file if provided.
+  let mediaCiphertext: Buffer | undefined;
+  let mediaIv: Buffer | undefined;
+  let mediaAuthTag: Buffer | undefined;
+  if (input.fileBytes) {
+    mediaIv = randomBytes(12);
+    const mediaCipher = createCipheriv("aes-256-gcm", aesKey, mediaIv);
+    mediaCiphertext = Buffer.concat([
+      mediaCipher.update(input.fileBytes),
+      mediaCipher.final(),
+    ]);
+    mediaAuthTag = mediaCipher.getAuthTag();
+  }
+
+  // Encrypt attachments if provided.
+  let encryptedAttachments: string | undefined;
+  if (input.attachments) {
+    const attachmentsJson = JSON.stringify(input.attachments);
+    const attachmentsIv = randomBytes(12);
+    const attachmentsCipher = createCipheriv(
+      "aes-256-gcm",
+      aesKey,
+      attachmentsIv,
+    );
+    const attachmentsCiphertext = Buffer.concat([
+      attachmentsCipher.update(attachmentsJson, "utf8"),
+      attachmentsCipher.final(),
+    ]);
+    const attachmentsAuthTag = attachmentsCipher.getAuthTag();
+    const combined = Buffer.concat([
+      attachmentsIv,
+      attachmentsAuthTag,
+      attachmentsCiphertext,
+    ]);
+    encryptedAttachments = bytesToBase64(new Uint8Array(combined));
+  }
+
+  // Wrap the AES key to both recipient and sender.
   const encryptedKey = publicEncrypt(
     {
       key: recipientKey,
@@ -406,105 +365,20 @@ export function encryptMediaToRecipient(
   );
 
   return {
-    content: bytesToBase64(new Uint8Array(ciphertext)),
-    iv: bytesToBase64(new Uint8Array(iv)),
-    authTag: bytesToBase64(new Uint8Array(authTag)),
+    content: bytesToBase64(new Uint8Array(contentCiphertext)),
+    contentIv: bytesToBase64(new Uint8Array(contentIv)),
+    contentAuthTag: bytesToBase64(new Uint8Array(contentAuthTag)),
+    mediaContent: mediaCiphertext
+      ? bytesToBase64(new Uint8Array(mediaCiphertext))
+      : undefined,
+    mediaIv: mediaIv ? bytesToBase64(new Uint8Array(mediaIv)) : undefined,
+    mediaAuthTag: mediaAuthTag
+      ? bytesToBase64(new Uint8Array(mediaAuthTag))
+      : undefined,
+    attachments: encryptedAttachments,
     encryptedKey: bytesToBase64(new Uint8Array(encryptedKey)),
     selfEncryptedKey: bytesToBase64(new Uint8Array(selfEncryptedKey)),
     keyId: senderKeyId,
-  };
-}
-
-/**
- * Encrypt a binary media file AND rich-message attachments with a single
- * AES-256-GCM key.
- *
- * The media content and the attachments JSON are encrypted with different IVs
- * so the nonce is never reused, but they share the same AES key. The key is
- * wrapped (RSA-OAEP/SHA-256) both to the recipient and to the sender so either
- * party can decrypt. The attachments blob embeds its own IV and authTag.
- *
- * This is the correct way to send a media message that also carries rich
- * attachments (linkPreview, location, buttons, …): using two separate
- * `encryptMediaToRecipient` + `encryptRichMessage` calls would produce two
- * independent AES keys, and the recipient would be unable to decrypt the
- * attachments because the message envelope only carries the media key.
- */
-export function encryptMediaWithAttachments(
-  fileBytes: Uint8Array,
-  attachments: MessageAttachments,
-  recipientPublicKeySpki: string,
-  senderKeyId: string,
-  senderPublicKeySpki: string,
-): {
-  content: string;
-  iv: string;
-  authTag: string;
-  encryptedKey: string;
-  selfEncryptedKey: string;
-  keyId: string;
-  encryptedAttachments: string;
-} {
-  const recipientKey = importPublicKey(recipientPublicKeySpki);
-  const senderKey = importPublicKey(senderPublicKeySpki);
-
-  const aesKey = randomBytes(32);
-
-  // Encrypt the media file
-  const mediaIv = randomBytes(12);
-  const mediaCipher = createCipheriv("aes-256-gcm", aesKey, mediaIv);
-  const mediaCiphertext = Buffer.concat([
-    mediaCipher.update(fileBytes),
-    mediaCipher.final(),
-  ]);
-  const mediaAuthTag = mediaCipher.getAuthTag();
-
-  // Encrypt the attachments with a different IV but the same key
-  const attachmentsJson = JSON.stringify(attachments);
-  const attachmentsIv = randomBytes(12);
-  const attachmentsCipher = createCipheriv(
-    "aes-256-gcm",
-    aesKey,
-    attachmentsIv,
-  );
-  const attachmentsCiphertext = Buffer.concat([
-    attachmentsCipher.update(attachmentsJson, "utf8"),
-    attachmentsCipher.final(),
-  ]);
-  const attachmentsAuthTag = attachmentsCipher.getAuthTag();
-  const combined = Buffer.concat([
-    attachmentsIv,
-    attachmentsAuthTag,
-    attachmentsCiphertext,
-  ]);
-  const encryptedAttachments = bytesToBase64(new Uint8Array(combined));
-
-  // Wrap the AES key to both recipient and sender
-  const encryptedKey = publicEncrypt(
-    {
-      key: recipientKey,
-      padding: constants.RSA_PKCS1_OAEP_PADDING,
-      oaepHash: "sha256",
-    },
-    aesKey,
-  );
-  const selfEncryptedKey = publicEncrypt(
-    {
-      key: senderKey,
-      padding: constants.RSA_PKCS1_OAEP_PADDING,
-      oaepHash: "sha256",
-    },
-    aesKey,
-  );
-
-  return {
-    content: bytesToBase64(new Uint8Array(mediaCiphertext)),
-    iv: bytesToBase64(new Uint8Array(mediaIv)),
-    authTag: bytesToBase64(new Uint8Array(mediaAuthTag)),
-    encryptedKey: bytesToBase64(new Uint8Array(encryptedKey)),
-    selfEncryptedKey: bytesToBase64(new Uint8Array(selfEncryptedKey)),
-    keyId: senderKeyId,
-    encryptedAttachments,
   };
 }
 

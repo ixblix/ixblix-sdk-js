@@ -15,8 +15,8 @@ import {
   IxblixClient,
   generateOperatorKeyPair,
   encryptToRecipient,
+  encryptMessagePayload,
   decryptEnvelope,
-  encryptMediaToRecipient,
   decryptMediaEnvelope,
   type Message,
 } from "./index.js";
@@ -191,20 +191,31 @@ async function main(): Promise<void> {
   const imageBytes = new Uint8Array([
     137, 80, 78, 71, 1, 2, 3, 4, 5, 250, 251, 252,
   ]);
-  const mediaEnvelope = encryptMediaToRecipient(
-    imageBytes,
+  const mediaPayload = encryptMessagePayload(
+    { fileBytes: imageBytes },
     customerPublicKey,
     operatorKey.keyId,
     operatorKey.publicKeySpki,
   );
-  const mediaMessage = await ixblix.sendCompanyMedia(
+  const mediaEnvelope = {
+    content: mediaPayload.mediaContent ?? "",
+    iv: mediaPayload.mediaIv ?? "",
+    authTag: mediaPayload.mediaAuthTag ?? "",
+    encryptedKey: mediaPayload.encryptedKey,
+    selfEncryptedKey: mediaPayload.selfEncryptedKey,
+    keyId: mediaPayload.keyId,
+  };
+  const mediaMessage = await ixblix.sendCompanyMessage(
     created.conversation.id,
+    mediaEnvelope,
+    "text",
+    undefined,
+    undefined,
     {
-      data: Buffer.from(mediaEnvelope.content, "base64"),
+      data: Buffer.from(mediaPayload.mediaContent ?? "", "base64"),
       fileName: "test.png",
       mimeType: "image/png",
     },
-    mediaEnvelope,
   );
   assert(Boolean(mediaMessage.mediaId), "media message has a mediaId");
 

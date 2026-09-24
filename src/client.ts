@@ -6,7 +6,7 @@
  * HTTP Basic Auth. The plans endpoint requires integrator authentication.
  */
 import { IxblixError } from "./errors.js";
-import { encryptToRecipient } from "./crypto.js";
+import { encryptToRecipient, encryptMessagePayload } from "./crypto.js";
 import type { OperatorKeyPair } from "./crypto.js";
 import type {
   ActivateCompanyResult,
@@ -21,7 +21,9 @@ import type {
   CreditPurchase,
   Media,
   Message,
+  MessageAttachments,
   MessageEnvelope,
+  MessagePayload,
   OperatorInput,
   OriginalChannelMessageInput,
   PaymentChangeOptions,
@@ -451,17 +453,80 @@ export class IxblixClient {
    * and `replyToId` to send it as a reply to another message.
    *
    * The operator's display name, avatar and Gravatar hash are embedded by the
-   * sender in the encrypted `attachments` JSON so the customer client can
-   * decrypt and render the correct avatar per message.
+   * sender in the encrypted `envelope.attachments` JSON so the customer client
+   * can decrypt and render the correct avatar per message.
+   *
+   * When `file` is provided, the message is sent as a media message with the
+   * attached file. The `content` field becomes the media caption. Use
+   * `contentIv`/`contentAuthTag` for the caption encryption (distinct from the
+   * media file's `iv`/`authTag`). All parts share the same AES key via
+   * `encryptedKey`/`selfEncryptedKey`/`keyId`.
    */
-  sendCompanyMessage(
+  async sendCompanyMessage(
     conversationId: string,
     envelope: MessageEnvelope,
     contentType = "text",
     operatorUuid?: string,
     replyToId?: string | null,
-    attachments?: string | null,
+    file?: MediaUpload,
+    contentIv?: string,
+    contentAuthTag?: string,
   ): Promise<Message> {
+    if (file) {
+      // Send as media message with file upload
+      const form = new FormData();
+      form.append("conversationId", conversationId);
+      form.append(
+        "file",
+        new Blob([file.data as BlobPart], { type: file.mimeType }),
+        file.fileName,
+      );
+      form.append("content", envelope.content);
+      form.append("contentType", contentType);
+      // Caption envelope fields (distinct from media envelope)
+      form.append("contentIv", contentIv ?? envelope.iv);
+      form.append("contentAuthTag", contentAuthTag ?? envelope.authTag);
+      // Media envelope fields
+      form.append("iv", envelope.iv);
+      form.append("authTag", envelope.authTag);
+      form.append("encryptedKey", envelope.encryptedKey);
+      form.append("selfEncryptedKey", envelope.selfEncryptedKey);
+      form.append("keyId", envelope.keyId);
+      if (operatorUuid) {
+        form.append("operatorUuid", operatorUuid);
+      }
+      if (replyToId) {
+        form.append("replyToId", replyToId);
+      }
+      if (envelope.attachments) {
+        form.append("attachments", envelope.attachments);
+      }
+
+      const headers: Record<string, string> = {};
+      if (this.apiKey) {
+        headers["X-API-Key"] = this.apiKey;
+      }
+      const response = await this.fetchImpl(
+        `${this.baseUrl}/api/messages/company`,
+        {
+          method: "POST",
+          headers,
+          body: form,
+        },
+      );
+      const data = (await response.json()) as Message | IxblixErrorBody;
+      if (!response.ok) {
+        const body = data as IxblixErrorBody;
+        throw new IxblixError(body?.error ?? "ixblix media upload failed", {
+          status: response.status,
+          code: body?.code,
+          details: body?.errors,
+        });
+      }
+      return data as Message;
+    }
+
+    // Send as regular text message
     return this.request<Message>("/api/messages/company", {
       method: "POST",
       body: JSON.stringify({
@@ -475,9 +540,113 @@ export class IxblixClient {
         keyId: envelope.keyId,
         operatorUuid,
         replyToId: replyToId ?? undefined,
-        attachments: attachments ?? undefined,
+        attachments: envelope.attachments ?? undefined,
       }),
     });
+  }
+
+  /**
+   * Encrypt and send a message from the company to the contact in one call.
+   *
+   * This is a convenience method that fetches the conversation keys, encrypts
+   * the payload (content and/or media file and/or attachments) with a single
+   * AES key, and sends the message. The operator keypair must be set in the
+   * client constructor.
+   *
+   * Pass `content` for text messages, `file` for media messages, or both for
+   * media with caption. Optionally pass `attachments` for rich message elements
+   * (buttons, vcard, location, linkPreview) and `operatorIdentity` to embed the
+   * operator's display name, avatar and Gravatar hash for per-message rendering.
+   *
+   * All encrypted parts (content, file, attachments) share the same AES key but
+   * use distinct IVs so the nonce is never reused.
+   */
+  async sendEncryptedMessage(
+    conversationId: string,
+    options: {
+      /** Plaintext content (required for text messages, optional caption for media). */
+      content?: string;
+      /** Media file to upload (optional). */
+      file?: { data: Uint8Array; fileName: string; mimeType: string };
+      operatorUuid?: string;
+      replyToId?: string | null;
+      attachments?: Omit<MessageAttachments, "operator">;
+      operatorIdentity?: {
+        uuid: string;
+        name: string;
+        image?: string;
+        gravatarHash?: string;
+      };
+    },
+  ): Promise<Message> {
+    if (!this.operatorKey) {
+      throw new IxblixError(
+        "Operator keypair is required to send encrypted messages",
+        { status: 400, code: "MISSING_OPERATOR_KEY" },
+      );
+    }
+
+    const keys = await this.getConversationKeys(conversationId);
+    if (!keys.customerPublicKey) {
+      throw new IxblixError(
+        "Customer has not joined the secure conversation yet",
+        { status: 409, code: "KEYS_NOT_ACTIVE" },
+      );
+    }
+
+    // Build attachments with operator identity if provided
+    let messageAttachments: MessageAttachments | null = null;
+    if (options.attachments || options.operatorIdentity) {
+      messageAttachments = {
+        ...options.attachments,
+        operator: options.operatorIdentity,
+      };
+    }
+
+    // Encrypt all parts with a single AES key
+    const payload = encryptMessagePayload(
+      {
+        content: options.content,
+        fileBytes: options.file?.data,
+        attachments: messageAttachments,
+      },
+      keys.customerPublicKey,
+      this.operatorKey.keyId,
+      this.operatorKey.publicKeySpki,
+    );
+
+    // Build the envelope for sendCompanyMessage
+    // For media messages, envelope.iv/authTag are for the media file
+    // For text messages, envelope.iv/authTag are for the content
+    const envelope: MessageEnvelope = {
+      content: payload.content,
+      iv: options.file ? (payload.mediaIv ?? "") : payload.contentIv,
+      authTag: options.file
+        ? (payload.mediaAuthTag ?? "")
+        : payload.contentAuthTag,
+      encryptedKey: payload.encryptedKey,
+      selfEncryptedKey: payload.selfEncryptedKey,
+      keyId: payload.keyId,
+      attachments: payload.attachments,
+    };
+
+    return this.sendCompanyMessage(
+      conversationId,
+      envelope,
+      "text",
+      options.operatorUuid,
+      options.replyToId,
+      options.file
+        ? {
+            data: options.file.data,
+            fileName: options.file.fileName,
+            mimeType: options.file.mimeType,
+          }
+        : undefined,
+      // For media messages, pass the caption IV/authTag separately
+      options.file ? payload.contentIv : undefined,
+      options.file ? payload.contentAuthTag : undefined,
+    );
   }
 
   /**
@@ -581,73 +750,6 @@ export class IxblixClient {
   // ---------------------------------------------------------------------------
   // Media
   // ---------------------------------------------------------------------------
-
-  /**
-   * Upload an encrypted media file from the company. `file.data` must be the
-   * ciphertext bytes produced by the media encryption helper. Optionally pass
-   * the operator uuid so the media message is attributed to the operator,
-   * `replyToId` to send it as a reply to another message, and `attachments`
-   * for rich message attachments (encrypted JSON string).
-   */
-  /**
-   * Upload an encrypted media file from the company to the contact. The file
-   * bytes and the optional attachments JSON must already be encrypted to the
-   * customer's public key.
-   *
-   * The operator's display name, avatar and Gravatar hash are embedded by the
-   * sender in the encrypted `attachments` JSON so the customer client can
-   * decrypt and render the correct avatar per message.
-   */
-  async sendCompanyMedia(
-    conversationId: string,
-    file: MediaUpload,
-    envelope: MessageEnvelope,
-    operatorUuid?: string,
-    replyToId?: string | null,
-    attachments?: string | null,
-  ): Promise<Message> {
-    const form = new FormData();
-    form.append("conversationId", conversationId);
-    form.append(
-      "file",
-      new Blob([file.data as BlobPart], { type: file.mimeType }),
-      file.fileName,
-    );
-    form.append("iv", envelope.iv);
-    form.append("authTag", envelope.authTag);
-    form.append("encryptedKey", envelope.encryptedKey);
-    form.append("selfEncryptedKey", envelope.selfEncryptedKey);
-    form.append("keyId", envelope.keyId);
-    if (operatorUuid) {
-      form.append("operatorUuid", operatorUuid);
-    }
-    if (replyToId) {
-      form.append("replyToId", replyToId);
-    }
-    if (attachments) {
-      form.append("attachments", attachments);
-    }
-
-    const headers: Record<string, string> = {};
-    if (this.apiKey) {
-      headers["X-API-Key"] = this.apiKey;
-    }
-    const response = await this.fetchImpl(`${this.baseUrl}/api/media/company`, {
-      method: "POST",
-      headers,
-      body: form,
-    });
-    const data = (await response.json()) as Message | IxblixErrorBody;
-    if (!response.ok) {
-      const body = data as IxblixErrorBody;
-      throw new IxblixError(body?.error ?? "ixblix media upload failed", {
-        status: response.status,
-        code: body?.code,
-        details: body?.errors,
-      });
-    }
-    return data as Message;
-  }
 
   /** Fetch the metadata (envelope + file info) of a media file. */
   getMedia(mediaId: string): Promise<Media> {
