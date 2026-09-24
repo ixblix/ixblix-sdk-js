@@ -447,8 +447,12 @@ export class IxblixClient {
   /**
    * Send an encrypted message from the company to the contact. The message must
    * already be encrypted to the customer's public key (see the crypto helpers).
-   * Optionally pass the operator uuid so it is attributed to the message, and
-   * `replyToId` to send it as a reply to another message.
+   * Optionally pass the operator uuid so it is attributed to the message,
+   * and `replyToId` to send it as a reply to another message.
+   *
+   * The operator's display name, avatar and Gravatar hash are embedded by the
+   * sender in the encrypted `attachments` JSON so the customer client can
+   * decrypt and render the correct avatar per message.
    */
   sendCompanyMessage(
     conversationId: string,
@@ -584,6 +588,15 @@ export class IxblixClient {
    * the operator uuid so the media message is attributed to the operator,
    * `replyToId` to send it as a reply to another message, and `attachments`
    * for rich message attachments (encrypted JSON string).
+   */
+  /**
+   * Upload an encrypted media file from the company to the contact. The file
+   * bytes and the optional attachments JSON must already be encrypted to the
+   * customer's public key.
+   *
+   * The operator's display name, avatar and Gravatar hash are embedded by the
+   * sender in the encrypted `attachments` JSON so the customer client can
+   * decrypt and render the correct avatar per message.
    */
   async sendCompanyMedia(
     conversationId: string,
