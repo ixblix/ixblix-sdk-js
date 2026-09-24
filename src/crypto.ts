@@ -27,7 +27,6 @@ import {
   type KeyObject,
 } from "node:crypto";
 import type {
-  MessageEnvelope,
   MessagePayload,
   MessageAttachments,
 } from "./types.js";
@@ -298,7 +297,7 @@ export function encryptMessagePayload(
 
   // Encrypt content (caption) if provided.
   let contentCiphertext = Buffer.alloc(0);
-  let contentIv = randomBytes(12);
+  const contentIv = randomBytes(12);
   let contentAuthTag = Buffer.alloc(0);
   if (input.content) {
     const contentCipher = createCipheriv("aes-256-gcm", aesKey, contentIv);

@@ -23,7 +23,6 @@ import type {
   Message,
   MessageAttachments,
   MessageEnvelope,
-  MessagePayload,
   OperatorInput,
   OriginalChannelMessageInput,
   PaymentChangeOptions,
