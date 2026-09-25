@@ -324,6 +324,14 @@ export interface Message {
    */
   attachments?: string | null;
   sentAt: string;
+  /**
+   * Timestamp when the recipient's device acknowledged receipt of the message.
+   * Null until delivered. Always set once `readAt` is set, since reading
+   * implies delivery.
+   */
+  deliveredAt?: string | null;
+  /** Timestamp when the recipient read the message. Null until read. */
+  readAt?: string | null;
 }
 
 /** Metadata of a media file attached to a message. */
@@ -529,6 +537,7 @@ export interface OriginalChannelMessageInput {
 export type WebhookEvent =
   | CompanyActivatedEvent
   | MessageReceivedEvent
+  | MessageDeliveredEvent
   | MessageReadEvent
   | CustomerJoinedEvent
   | ConversationClosedEvent
@@ -552,6 +561,18 @@ export interface MessageReceivedEvent {
   /** Identifier of the message this one replies to, when it is a reply. */
   replyToId?: string | null;
   sentAt: string;
+}
+
+/**
+ * Delivered when the customer's device acknowledges receipt of a company-sent
+ * message (before it is read).
+ */
+export interface MessageDeliveredEvent {
+  event: "MESSAGE_DELIVERED";
+  companyId: string;
+  conversationId: string;
+  messageId: string;
+  deliveredAt: string;
 }
 
 /** Delivered when the customer reads a company-sent message. */

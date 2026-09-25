@@ -712,9 +712,32 @@ export class IxblixClient {
   }
 
   /**
+   * Mark a contact-sent message as delivered to the operator. Emits a
+   * `message_delivered` Socket.io event to the customer's chat app so the
+   * customer sees the delivered receipt. Call this as soon as the operator
+   * client receives the message, before it is read.
+   */
+  markMessageDeliveredByCompany(
+    conversationId: string,
+    messageId: string,
+  ): Promise<{ messageId: string; deliveredAt: string }> {
+    return this.request<{ messageId: string; deliveredAt: string }>(
+      "/api/messages/company/delivered",
+      {
+        method: "POST",
+        body: JSON.stringify({ conversationId, messageId }),
+      },
+    );
+  }
+
+  /**
    * Mark a contact-sent message as read by the operator. Emits a
    * `message_read` Socket.io event to the customer's chat app so the customer
    * sees the read receipt.
+   *
+   * Only report a read when the chat window is focused and the message is
+   * visible in the viewport; otherwise report delivery instead. Reading a
+   * message also records its delivery when it was not delivered yet.
    */
   markMessageReadByCompany(
     conversationId: string,

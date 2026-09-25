@@ -46,6 +46,7 @@ export function parseWebhook(body: unknown): ParsedWebhook {
   switch (event) {
     case "COMPANY_ACTIVATED":
     case "MESSAGE_RECEIVED":
+    case "MESSAGE_DELIVERED":
     case "MESSAGE_READ":
     case "CUSTOMER_JOINED":
     case "CONVERSATION_CLOSED":

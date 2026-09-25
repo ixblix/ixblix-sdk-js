@@ -285,17 +285,32 @@ at-least-once) and `X-Ixblix-Event`. See
 [`docs/integrator/05-webhooks.md`](../docs/integrator/05-webhooks.md) for the
 full event reference.
 
-## Read receipts and presence
+## Delivery and read receipts
 
-When your agents have displayed a customer-sent message, mark it as read so the
+Every message moves through three acknowledgement states: `sent`, `delivered`
+and `read`. `read` implies `delivered`.
+
+When your agents' client receives a customer-sent message, mark it as delivered
+so the customer's chat app shows a delivered receipt:
+
+```ts
+await ixblix.markMessageDeliveredByCompany(conversationId, messageId);
+```
+
+When your agents have actually **seen** the message, mark it as read so the
 customer's chat app shows a read receipt:
 
 ```ts
 await ixblix.markMessageReadByCompany(conversationId, messageId);
 ```
 
-When the customer reads one of your messages, ixblix pushes a `MESSAGE_READ`
-webhook to your endpoint (see the webhook handler above).
+> Only report a read when the chat window is focused and the message is inside
+> the viewport. Report delivery instead when the message is off-screen or the
+> window is in the background — otherwise the customer sees a false read receipt.
+
+When the customer's device receives one of your messages, ixblix pushes a
+`MESSAGE_DELIVERED` webhook; when the customer actually sees it, ixblix pushes a
+`MESSAGE_READ` webhook (see the webhook handler above).
 
 Report operator typing/recording so the customer's chat app can show an
 indicator, or send `stopped` to clear it immediately:
