@@ -57,9 +57,16 @@ export interface IxblixClientOptions {
   fetch?: typeof fetch;
 }
 
-/** A media file to upload, with its plaintext bytes and metadata. */
+/**
+ * A media file to upload via the low-level {@link IxblixClient.sendCompanyMessage}.
+ *
+ * The backend stores these bytes as-is (they are treated as ciphertext), so
+ * `data` must already be encrypted and `envelope.iv`/`envelope.authTag` must
+ * match those bytes. For a high-level helper that encrypts plaintext for you,
+ * use {@link IxblixClient.sendEncryptedMessage} instead.
+ */
 export interface MediaUpload {
-  /** Plaintext file bytes. The SDK encrypts them before upload. */
+  /** Encrypted (ciphertext) file bytes. */
   data: Uint8Array;
   fileName: string;
   mimeType: string;
@@ -629,19 +636,25 @@ export class IxblixClient {
       attachments: payload.attachments,
     };
 
+    // The backend stores the raw media bytes as ciphertext, so upload the
+    // encrypted media (not the plaintext) together with its IV/authTag.
+    const encryptedFile = options.file
+      ? {
+          data: new Uint8Array(
+            Buffer.from(payload.mediaContent ?? "", "base64"),
+          ),
+          fileName: options.file.fileName,
+          mimeType: options.file.mimeType,
+        }
+      : undefined;
+
     return this.sendCompanyMessage(
       conversationId,
       envelope,
       "text",
       options.operatorUuid,
       options.replyToId,
-      options.file
-        ? {
-            data: options.file.data,
-            fileName: options.file.fileName,
-            mimeType: options.file.mimeType,
-          }
-        : undefined,
+      encryptedFile,
       // For media messages, pass the caption IV/authTag separately
       options.file ? payload.contentIv : undefined,
       options.file ? payload.contentAuthTag : undefined,
