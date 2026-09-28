@@ -439,6 +439,7 @@ export function encryptPushPreview(
   preview: {
     text?: string;
     senderName?: string;
+    iconUrl?: string;
     thumbnailBase64?: string;
   },
   customerPublicKeySpki: string,

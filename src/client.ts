@@ -605,6 +605,7 @@ export class IxblixClient {
       pushPreview?: {
         text?: string;
         senderName?: string;
+        iconUrl?: string;
         thumbnailBase64?: string;
       };
     },
@@ -674,13 +675,35 @@ export class IxblixClient {
 
     // Build metadata with encrypted push preview.
     // When an explicit pushPreview is provided, use it. Otherwise, auto-generate
-    // one from the message content and operator identity so push notifications
-    // always show meaningful text without requiring the caller to opt in.
+    // one from the message content, operator identity, and company icon so push
+    // notifications always show meaningful text without requiring the caller to
+    // opt in.
     let metadata: Record<string, unknown> | undefined;
-    const preview = options.pushPreview ?? {
-      text: options.content || options.file?.fileName,
-      senderName: options.operatorIdentity?.name,
-    };
+    let preview = options.pushPreview;
+    if (!preview) {
+      // Fetch company profile to get the square icon for the notification.
+      let companyIconUrl: string | undefined;
+      try {
+        const profile = await this.getProfile();
+        companyIconUrl = profile.customizations?.squareIconUrl ?? undefined;
+        // eslint-disable-next-line no-console
+        console.debug(
+          "[ixblix-sdk] Push preview: companyIconUrl =",
+          companyIconUrl,
+          "customizations =",
+          profile.customizations,
+        );
+      } catch (err) {
+        // Profile fetch failed; fall back to no icon.
+        // eslint-disable-next-line no-console
+        console.debug("[ixblix-sdk] Push preview: profile fetch failed", err);
+      }
+      preview = {
+        text: options.content || options.file?.fileName,
+        senderName: options.operatorIdentity?.name,
+        iconUrl: companyIconUrl,
+      };
+    }
     if (preview.text || preview.senderName) {
       const encryptedPushPayload = encryptPushPreview(
         preview,
