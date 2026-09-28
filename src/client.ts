@@ -411,7 +411,7 @@ export class IxblixClient {
   createConversation(input: {
     contact: ContactInput;
     operator?: {
-      uuid?: string;
+      uuid: string;
       name?: string;
       image?: string;
       gravatarHash?: string;
@@ -476,7 +476,7 @@ export class IxblixClient {
     conversationId: string,
     envelope: MessageEnvelope,
     contentType = "text",
-    operatorUuid?: string,
+    operatorUuid: string,
     replyToId?: string | null,
     file?: MediaUpload,
     contentIv?: string,
@@ -503,9 +503,7 @@ export class IxblixClient {
       form.append("encryptedKey", envelope.encryptedKey);
       form.append("selfEncryptedKey", envelope.selfEncryptedKey);
       form.append("keyId", envelope.keyId);
-      if (operatorUuid) {
-        form.append("operatorUuid", operatorUuid);
-      }
+      form.append("operatorUuid", operatorUuid);
       if (replyToId) {
         form.append("replyToId", replyToId);
       }
@@ -583,7 +581,7 @@ export class IxblixClient {
       content?: string;
       /** Media file to upload (optional). */
       file?: { data: Uint8Array; fileName: string; mimeType: string };
-      operatorUuid?: string;
+      operatorUuid: string;
       replyToId?: string | null;
       attachments?: Omit<MessageAttachments, "operator">;
       operatorIdentity?: {
@@ -746,7 +744,7 @@ export class IxblixClient {
     conversationId: string,
     messageId: string,
     emoji: string,
-    operatorUuid?: string,
+    operatorUuid: string,
   ): Promise<Message> {
     const keys = await this.getConversationKeys(conversationId);
     if (!keys.customerPublicKey) {

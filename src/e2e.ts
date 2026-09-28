@@ -11,6 +11,7 @@
  *
  * Run with: `npx tsx src/e2e.test.ts` (or `npm run test:e2e`).
  */
+import { randomUUID } from "node:crypto";
 import {
   IxblixClient,
   generateOperatorKeyPair,
@@ -80,6 +81,7 @@ async function main(): Promise<void> {
 
   // 3. Operator keypair.
   const operatorKey = generateOperatorKeyPair();
+  const operatorUuid = randomUUID();
 
   // 4. Register the operator key as the company encryption key.
   await ixblix.registerEncryptionKey({
@@ -135,6 +137,8 @@ async function main(): Promise<void> {
   const sent = await ixblix.sendCompanyMessage(
     created.conversation.id,
     outbound,
+    "text",
+    operatorUuid,
   );
   assert(sent.senderType === "COMPANY", "message sent by company");
   assert(sent.contentEncrypted === true, "message is encrypted");
@@ -209,7 +213,7 @@ async function main(): Promise<void> {
     created.conversation.id,
     mediaEnvelope,
     "text",
-    undefined,
+    operatorUuid,
     undefined,
     {
       data: Buffer.from(mediaPayload.mediaContent ?? "", "base64"),

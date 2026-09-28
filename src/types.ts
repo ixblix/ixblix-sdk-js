@@ -137,7 +137,7 @@ export interface CompanySummary {
  */
 export interface Operator {
   /** Stable identifier of the operator in the desk/CRM. */
-  uuid?: string;
+  uuid: string;
   /** Display name of the operator. */
   name?: string;
   /** URL of the operator's avatar image. */
