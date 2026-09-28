@@ -6,7 +6,11 @@
  * HTTP Basic Auth. The plans endpoint requires integrator authentication.
  */
 import { IxblixError } from "./errors.js";
-import { encryptToRecipient, encryptMessagePayload } from "./crypto.js";
+import {
+  encryptToRecipient,
+  encryptMessagePayload,
+  encryptPushPreview,
+} from "./crypto.js";
 import type { OperatorKeyPair } from "./crypto.js";
 import type {
   ActivateCompanyResult,
@@ -477,6 +481,7 @@ export class IxblixClient {
     file?: MediaUpload,
     contentIv?: string,
     contentAuthTag?: string,
+    metadata?: Record<string, unknown>,
   ): Promise<Message> {
     if (file) {
       // Send as media message with file upload
@@ -506,6 +511,9 @@ export class IxblixClient {
       }
       if (envelope.attachments) {
         form.append("attachments", envelope.attachments);
+      }
+      if (metadata) {
+        form.append("metadata", JSON.stringify(metadata));
       }
 
       const headers: Record<string, string> = {};
@@ -547,6 +555,7 @@ export class IxblixClient {
         operatorUuid,
         replyToId: replyToId ?? undefined,
         attachments: envelope.attachments ?? undefined,
+        metadata,
       }),
     });
   }
@@ -582,6 +591,21 @@ export class IxblixClient {
         name: string;
         image?: string;
         gravatarHash?: string;
+      };
+      /**
+       * Push notification preview. When provided, the SDK encrypts it with the
+       * customer's public key and includes it in the message metadata as
+       * `encryptedPushPayload`. The customer's service worker decrypts and
+       * displays it in the notification.
+       *
+       * When omitted, the SDK auto-generates a preview from `content` (or
+       * `file.fileName` for media) and `operatorIdentity.name`. Pass an
+       * explicit empty object `{}` to suppress the automatic preview.
+       */
+      pushPreview?: {
+        text?: string;
+        senderName?: string;
+        thumbnailBase64?: string;
       };
     },
   ): Promise<Message> {
@@ -648,6 +672,23 @@ export class IxblixClient {
         }
       : undefined;
 
+    // Build metadata with encrypted push preview.
+    // When an explicit pushPreview is provided, use it. Otherwise, auto-generate
+    // one from the message content and operator identity so push notifications
+    // always show meaningful text without requiring the caller to opt in.
+    let metadata: Record<string, unknown> | undefined;
+    const preview = options.pushPreview ?? {
+      text: options.content || options.file?.fileName,
+      senderName: options.operatorIdentity?.name,
+    };
+    if (preview.text || preview.senderName) {
+      const encryptedPushPayload = encryptPushPreview(
+        preview,
+        keys.customerPublicKey,
+      );
+      metadata = { encryptedPushPayload };
+    }
+
     return this.sendCompanyMessage(
       conversationId,
       envelope,
@@ -658,6 +699,7 @@ export class IxblixClient {
       // For media messages, pass the caption IV/authTag separately
       options.file ? payload.contentIv : undefined,
       options.file ? payload.contentAuthTag : undefined,
+      metadata,
     );
   }
 

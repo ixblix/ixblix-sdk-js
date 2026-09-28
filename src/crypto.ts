@@ -26,10 +26,7 @@ import {
   constants,
   type KeyObject,
 } from "node:crypto";
-import type {
-  MessagePayload,
-  MessageAttachments,
-} from "./types.js";
+import type { MessagePayload, MessageAttachments } from "./types.js";
 
 /** Encode a Buffer as a URL-safe base64 string (no padding). */
 function bytesToBase64(bytes: Uint8Array): string {
@@ -427,4 +424,34 @@ export function decryptMediaEnvelope(
     }
   }
   return null;
+}
+
+/**
+ * Encrypt a push notification preview to the customer's RSA public key.
+ *
+ * The preview is a small JSON object `{ text, senderName, thumbnailBase64? }`
+ * that the customer's service worker decrypts and displays in the notification.
+ * The backend never sees the plaintext — it only relays the opaque ciphertext.
+ *
+ * Uses RSA-OAEP/SHA-256, matching the customer keypair format.
+ */
+export function encryptPushPreview(
+  preview: {
+    text?: string;
+    senderName?: string;
+    thumbnailBase64?: string;
+  },
+  customerPublicKeySpki: string,
+): string {
+  const recipientKey = importPublicKey(customerPublicKeySpki);
+  const plaintext = JSON.stringify(preview);
+  const encrypted = publicEncrypt(
+    {
+      key: recipientKey,
+      padding: constants.RSA_PKCS1_OAEP_PADDING,
+      oaepHash: "sha256",
+    },
+    Buffer.from(plaintext, "utf8"),
+  );
+  return bytesToBase64(new Uint8Array(encrypted));
 }
