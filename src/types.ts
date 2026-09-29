@@ -117,7 +117,6 @@ export interface CompanyCustomizationInput {
 export interface CompanyProfile {
   id: string;
   name: string;
-  handle: string;
   status: string;
   websiteUrl?: string | null;
   customizations?: CompanyCustomization | null;
@@ -370,7 +369,6 @@ export interface Plan {
 /** Company registration payload (keyless onboarding). */
 export interface RegisterCompanyInput {
   name: string;
-  handle: string;
   planId?: string;
   confirmationWebhookUrl?: string;
   /** Contact e-mail forwarded to the gateway as the checkout customer e-mail. */

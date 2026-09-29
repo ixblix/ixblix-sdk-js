@@ -60,10 +60,8 @@ async function main(): Promise<void> {
     throw new Error("No active public plan found. Seed the backend first.");
   }
 
-  const handle = `sdk-e2e-${Date.now()}`;
   const register = await bootstrap.registerCompany({
     name: "SDK E2E Test",
-    handle,
     planId: defaultPlan.id,
   });
   const activate = await bootstrap.activateCompany(
@@ -251,7 +249,7 @@ async function main(): Promise<void> {
   // eslint-disable-next-line no-console
   console.log("E2E test passed ✓");
   // eslint-disable-next-line no-console
-  console.log(`  Company: ${register.company.handle}`);
+  console.log(`  Company: ${register.company.id}`);
   // eslint-disable-next-line no-console
   console.log(`  Conversation: ${created.conversation.id}`);
 }
