@@ -12,6 +12,7 @@ import {
   encryptPushPreview,
 } from "./crypto.js";
 import type { OperatorKeyPair } from "./crypto.js";
+import { createPublicKey } from "node:crypto";
 import type {
   ActivateCompanyResult,
   CompanyBalance,
@@ -45,6 +46,20 @@ import type {
   IxblixErrorBody,
 } from "./types.js";
 
+/** Pino-compatible logger interface. */
+export interface IxblixLogger {
+  error(obj: Record<string, unknown>, msg?: string): void;
+  error(msg: string): void;
+  warn(obj: Record<string, unknown>, msg?: string): void;
+  warn(msg: string): void;
+  info(obj: Record<string, unknown>, msg?: string): void;
+  info(msg: string): void;
+  debug(obj: Record<string, unknown>, msg?: string): void;
+  debug(msg: string): void;
+  trace(obj: Record<string, unknown>, msg?: string): void;
+  trace(msg: string): void;
+}
+
 /** Options for constructing an {@link IxblixClient}. */
 export interface IxblixClientOptions {
   /** Base URL of the ixblix API, e.g. `https://api.ixblix.app`. */
@@ -59,6 +74,8 @@ export interface IxblixClientOptions {
   operatorKey?: OperatorKeyPair;
   /** Optional custom fetch implementation (e.g. for testing or proxies). */
   fetch?: typeof fetch;
+  /** Optional Pino-compatible logger for debugging encryption errors. */
+  logger?: IxblixLogger;
 }
 
 /**
@@ -108,6 +125,7 @@ export class IxblixClient {
   private readonly integratorAccessToken?: string;
   private readonly fetchImpl: typeof fetch;
   private readonly operatorKey?: OperatorKeyPair;
+  private readonly logger?: IxblixLogger;
 
   constructor(options: IxblixClientOptions) {
     this.baseUrl = options.baseUrl.replace(/\/+$/, "");
@@ -116,6 +134,115 @@ export class IxblixClient {
     this.integratorAccessToken = options.integratorAccessToken;
     this.operatorKey = options.operatorKey;
     this.fetchImpl = options.fetch ?? globalThis.fetch;
+    this.logger = options.logger;
+
+    // Validate operator keypair if provided
+    if (this.operatorKey) {
+      this.validateOperatorKeyPair(this.operatorKey);
+    }
+  }
+
+  /**
+   * Validate that the operator keypair is well-formed and the public key
+   * matches the private key. Throws IxblixError on failure.
+   */
+  private validateOperatorKeyPair(key: OperatorKeyPair): void {
+    try {
+      // Check keyId is present
+      if (!key.keyId || typeof key.keyId !== "string") {
+        throw new Error("keyId is required and must be a string");
+      }
+
+      // Check publicKeySpki is present and valid base64
+      if (!key.publicKeySpki || typeof key.publicKeySpki !== "string") {
+        throw new Error("publicKeySpki is required and must be a string");
+      }
+
+      // Try to decode base64
+      let publicDer: Buffer;
+      try {
+        publicDer = Buffer.from(key.publicKeySpki, "base64");
+      } catch {
+        throw new Error("publicKeySpki is not valid base64");
+      }
+
+      // Try to import as SPKI
+      let publicKey: import("node:crypto").KeyObject;
+      try {
+        publicKey = createPublicKey({
+          key: publicDer,
+          type: "spki",
+          format: "der",
+        });
+      } catch (e) {
+        throw new Error(
+          `publicKeySpki is not a valid SPKI DER public key: ${e instanceof Error ? e.message : String(e)}`,
+        );
+      }
+
+      // Check it's RSA
+      if (publicKey.asymmetricKeyType !== "rsa") {
+        throw new Error(
+          `publicKeySpki is not an RSA key (got ${publicKey.asymmetricKeyType})`,
+        );
+      }
+
+      // Check key size
+      const modulusLength = publicKey.asymmetricKeyDetails?.modulusLength ?? 0;
+      if (modulusLength < 2048) {
+        throw new Error(
+          `publicKeySpki RSA key is too small (${modulusLength} bits, minimum 2048)`,
+        );
+      }
+
+      // Check privateKey is present
+      if (!key.privateKey) {
+        throw new Error("privateKey is required");
+      }
+
+      // Check privateKey is RSA
+      if (key.privateKey.asymmetricKeyType !== "rsa") {
+        throw new Error(
+          `privateKey is not an RSA key (got ${key.privateKey.asymmetricKeyType})`,
+        );
+      }
+
+      // Derive public key from private key and compare
+      const derivedPublic = createPublicKey(key.privateKey);
+      const derivedPublicSpki = derivedPublic
+        .export({ type: "spki", format: "der" })
+        .toString("base64");
+
+      if (derivedPublicSpki !== key.publicKeySpki) {
+        throw new Error(
+          "publicKeySpki does not match the public key derived from privateKey",
+        );
+      }
+
+      this.logger?.debug(
+        {
+          keyId: key.keyId,
+          modulusLength,
+          publicKeyLength: key.publicKeySpki.length,
+        },
+        "Operator keypair validated successfully",
+      );
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : String(error);
+      this.logger?.error(
+        {
+          keyId: key.keyId,
+          error: message,
+          publicKeySpki: key.publicKeySpki?.substring(0, 100),
+        },
+        "Operator keypair validation failed",
+      );
+      throw new IxblixError(
+        `Invalid operator keypair: ${message}`,
+        { status: 400, code: "INVALID_OPERATOR_KEY" },
+      );
+    }
   }
 
   private buildHeaders(init?: HeadersInit): Record<string, string> {
@@ -623,6 +750,48 @@ export class IxblixClient {
       );
     }
 
+    // Validate customer public key before attempting encryption
+    try {
+      const customerKeyDer = Buffer.from(keys.customerPublicKey, "base64");
+      const customerKey = createPublicKey({
+        key: customerKeyDer,
+        type: "spki",
+        format: "der",
+      });
+      
+      if (customerKey.asymmetricKeyType !== "rsa") {
+        throw new Error(`Customer key is not RSA (got ${customerKey.asymmetricKeyType})`);
+      }
+      
+      const modulusLength = customerKey.asymmetricKeyDetails?.modulusLength ?? 0;
+      if (modulusLength < 2048) {
+        throw new Error(`Customer RSA key is too small (${modulusLength} bits, minimum 2048)`);
+      }
+      
+      this.logger?.debug(
+        {
+          conversationId,
+          customerKeyModulus: modulusLength,
+          customerKeyLength: keys.customerPublicKey.length,
+        },
+        "Customer public key validated successfully",
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger?.error(
+        {
+          conversationId,
+          customerPublicKey: keys.customerPublicKey.substring(0, 100),
+          error: message,
+        },
+        "Customer public key validation failed",
+      );
+      throw new IxblixError(
+        `Invalid customer public key: ${message}. The customer may need to clear their browser storage and rejoin the conversation.`,
+        { status: 400, code: "INVALID_CUSTOMER_KEY" },
+      );
+    }
+
     // Build attachments with operator identity if provided
     let messageAttachments: MessageAttachments | null = null;
     if (options.attachments || options.operatorIdentity) {
@@ -633,16 +802,50 @@ export class IxblixClient {
     }
 
     // Encrypt all parts with a single AES key
-    const payload = encryptMessagePayload(
-      {
-        content: options.content,
-        fileBytes: options.file?.data,
-        attachments: messageAttachments,
-      },
-      keys.customerPublicKey,
-      this.operatorKey.keyId,
-      this.operatorKey.publicKeySpki,
-    );
+    let payload;
+    try {
+      payload = encryptMessagePayload(
+        {
+          content: options.content,
+          fileBytes: options.file?.data,
+          attachments: messageAttachments,
+        },
+        keys.customerPublicKey,
+        this.operatorKey.keyId,
+        this.operatorKey.publicKeySpki,
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const stack = error instanceof Error ? error.stack : undefined;
+      
+      this.logger?.error(
+        {
+          conversationId,
+          operatorKeyId: this.operatorKey.keyId,
+          customerPublicKey: keys.customerPublicKey?.substring(0, 100),
+          contentLength: options.content?.length,
+          fileSize: options.file?.data?.length,
+          hasAttachments: Boolean(messageAttachments),
+          error: message,
+          stack,
+        },
+        "Encryption failed in sendEncryptedMessage",
+      );
+      
+      // Provide more specific error messages
+      if (message.includes("data too large")) {
+        throw new IxblixError(
+          "Encryption failed: data too large for RSA key. This usually means the customer's public key is corrupted or has an invalid size. " +
+          "Ask the customer to clear their browser storage and rejoin the conversation.",
+          { status: 400, code: "ENCRYPTION_KEY_ERROR" },
+        );
+      }
+      
+      throw new IxblixError(
+        `Encryption failed: ${message}`,
+        { status: 400, code: "ENCRYPTION_FAILED" },
+      );
+    }
 
     // Build the envelope for sendCompanyMessage
     // For media messages, envelope.iv/authTag are for the media file

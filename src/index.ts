@@ -16,6 +16,7 @@
 export { IxblixClient } from "./client.js";
 export type {
   IxblixClientOptions,
+  IxblixLogger,
   MediaUpload,
   MediaDownload,
   BrandingFile,
