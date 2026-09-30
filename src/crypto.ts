@@ -433,7 +433,8 @@ export function decryptMediaEnvelope(
  * that the customer's service worker decrypts and displays in the notification.
  * The backend never sees the plaintext — it only relays the opaque ciphertext.
  *
- * Uses RSA-OAEP/SHA-256, matching the customer keypair format.
+ * Uses hybrid encryption: AES-256-GCM for the preview, RSA-OAEP/SHA-256 for
+ * the AES key. This allows previews of any size (not limited to 190 bytes).
  */
 export function encryptPushPreview(
   preview: {
@@ -446,13 +447,30 @@ export function encryptPushPreview(
 ): string {
   const recipientKey = importPublicKey(customerPublicKeySpki);
   const plaintext = JSON.stringify(preview);
-  const encrypted = publicEncrypt(
+  
+  // Fresh AES-256-GCM key
+  const aesKey = randomBytes(32);
+  const iv = randomBytes(12);
+  
+  // Encrypt the preview with AES
+  const cipher = createCipheriv("aes-256-gcm", aesKey, iv);
+  const ciphertext = Buffer.concat([
+    cipher.update(plaintext, "utf8"),
+    cipher.final(),
+  ]);
+  const authTag = cipher.getAuthTag();
+  
+  // Wrap the AES key with RSA-OAEP
+  const encryptedKey = publicEncrypt(
     {
       key: recipientKey,
       padding: constants.RSA_PKCS1_OAEP_PADDING,
       oaepHash: "sha256",
     },
-    Buffer.from(plaintext, "utf8"),
+    aesKey,
   );
-  return bytesToBase64(new Uint8Array(encrypted));
+  
+  // Pack as: encryptedKey (256 bytes) || iv (12 bytes) || authTag (16 bytes) || ciphertext
+  const packed = Buffer.concat([encryptedKey, iv, authTag, ciphertext]);
+  return bytesToBase64(new Uint8Array(packed));
 }
